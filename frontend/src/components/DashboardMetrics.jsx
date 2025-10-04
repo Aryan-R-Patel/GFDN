@@ -99,7 +99,7 @@ export default function DashboardMetrics({ metrics }) {
     >
       <div
         className="metrics__container"
-        style={{ display: "inline-flex", whiteSpace: "nowrap" }}
+        style={{ display: "inline-flex", whiteSpace: "nowrap", gap: "8px" }}
       >
         <div className="metrics__item">
           <small>Total processed</small>
