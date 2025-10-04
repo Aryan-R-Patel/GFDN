@@ -335,6 +335,7 @@ io.on('connection', (socket) => {
   socket.emit('transaction:seed', recentTransactions.slice(-50));
 });
 
+
 const PORT = process.env.PORT || 4000;
 
 // Start the watcher immediately (so its logs appear in the same terminal when nodemon runs)
@@ -347,12 +348,9 @@ startWatcher('/transactions')
     console.error('Failed to start watcher:', err);
   });
 
-httpServer.listen(PORT, () => {
-  console.log(`GFDN backend listening on port ${PORT}`);
 // Initialize server with Firebase workflow
 async function startServer() {
   await loadWorkflowFromFirebase();
-
   httpServer.listen(PORT, () => {
     console.log(`GFDN backend listening on port ${PORT}`);
     console.log(`Active workflow: ${activeWorkflow.name} (v${activeWorkflow.version})`);
