@@ -338,9 +338,85 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 4000;
 
+// Callback to process Firebase transactions through the workflow
+function onFirebaseTransaction(transactionData, key) {
+  try {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔥 Processing Firebase Transaction through Workflow');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // Ensure transaction has required fields
+    const transaction = {
+      id: key || transactionData.id || `fb-${Date.now()}`,
+      amount: transactionData.amount,
+      accountId: transactionData.accountId || transactionData.account_id,
+      location: transactionData.location,
+      timestamp: transactionData.timestamp || new Date().toISOString(),
+      ...transactionData
+    };
+
+    const services = {
+      metrics,
+      velocityCache,
+    };
+
+    const start = Date.now();
+    const result = executeWorkflow(activeWorkflow, transaction, services);
+    const latency = Date.now() - start;
+
+    // Update metrics
+    metrics.incrementCounter(result.decision.status, transaction.amount);
+    metrics.recordLatency(latency);
+
+    // Create enriched transaction record
+    const enriched = {
+      id: transaction.id,
+      transaction,
+      decision: result.decision,
+      history: result.history,
+      processedAt: new Date().toISOString(),
+      latency,
+    };
+
+    // Add to recent transactions and emit to frontend
+    addRecentTransaction(enriched);
+    io.emit('transaction:new', enriched);
+    emitState();
+
+    // Print the decision in the terminal
+    const statusEmoji = result.decision.status === 'APPROVE' ? '✅' :
+                       result.decision.status === 'BLOCK' ? '🚫' : '⚠️';
+
+    console.log(`\n${statusEmoji} DECISION: ${result.decision.status}`);
+    console.log(`Reason: ${result.decision.reason}`);
+    console.log(`Transaction ID: ${transaction.id}`);
+    console.log(`Amount: $${transaction.amount}`);
+    console.log(`Processing Time: ${latency}ms`);
+
+    // Debug: Show workflow execution details
+    if (result.history && result.history.length > 0) {
+      console.log(`\nWorkflow Execution:`);
+      result.history.forEach((step) => {
+        const stepEmoji = step.status === 'CONTINUE' ? '→' :
+                         step.status === 'FLAG' ? '⚠️' :
+                         step.status === 'BLOCK' ? '🚫' : '✓';
+        console.log(`  ${stepEmoji} ${step.label || step.type}: ${step.status} - ${step.reason || ''}`);
+      });
+    } else {
+      console.log(`\n⚠️  Warning: No workflow nodes were executed!`);
+      console.log(`   Active workflow has ${activeWorkflow.nodes?.length || 0} nodes`);
+    }
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+  } catch (error) {
+    console.error('Error processing Firebase transaction through workflow:', error);
+  }
+}
+
 // Start the watcher immediately (so its logs appear in the same terminal when nodemon runs)
 let watcherStopFn = null;
-startWatcher('/transactions')
+startWatcher('/transactions', onFirebaseTransaction)
   .then((stopFn) => {
     watcherStopFn = stopFn;
   })

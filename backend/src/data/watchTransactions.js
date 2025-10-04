@@ -7,7 +7,7 @@ function prettyPrint(prefix, key, data) {
   console.log(JSON.stringify(data, null, 2));
 }
 
-export default async function startWatcher(path = '/transactions') {
+export default async function startWatcher(path = '/transactions', onNewTransaction = null) {
   const dbRef = ref(database, path);
   console.log(`Starting Firebase RTDB watcher on path: ${path}`);
 
@@ -35,6 +35,11 @@ export default async function startWatcher(path = '/transactions') {
       if (existing.has(key)) return; // skip existing
       prettyPrint('Added', key, value);
       existing.add(key);
+
+      // Call the callback if provided (for workflow processing)
+      if (onNewTransaction && typeof onNewTransaction === 'function') {
+        onNewTransaction(value, key);
+      }
     } catch (e) {
       console.error('Error handling child snapshot:', e);
     }
