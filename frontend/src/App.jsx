@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import useGfdnStore from './store/useGfdnStore.js';
-import { useSocketConnection } from './hooks/useSocket.js';
-import GlobeView from './components/GlobeView.jsx';
-import WorkflowEditor from './components/WorkflowEditor.jsx';
-import DashboardMetrics from './components/DashboardMetrics.jsx';
-import TransactionFeed from './components/TransactionFeed.jsx';
-import AIAssistant from './components/AIAssistant.jsx';
+import { useState, useEffect } from 'react';
+import useGfdnStore from './store/useGfdnStore';
+import useSocketConnection from './hooks/useSocket';
+import DashboardMetrics from './components/DashboardMetrics';
+import GlobeView from './components/GlobeView';
+import TransactionFeed from './components/TransactionFeed';
+import WorkflowEditor from './components/WorkflowEditor';
+import AIAssistant from './components/AIAssistant';
 
 export default function App() {
   const fetchInitialData = useGfdnStore((state) => state.fetchInitialData);
@@ -58,8 +58,8 @@ export default function App() {
         </section>
         <section className="app__main-right">
           <WorkflowEditor workflow={workflow} />
-          <AIAssistant 
-            suggestions={suggestions} 
+          <AIAssistant
+            suggestions={suggestions}
             metrics={metrics}
             transactions={transactions}
           />
