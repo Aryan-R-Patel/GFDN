@@ -12,6 +12,11 @@ import useGfdnStore from '../store/useGfdnStore.js';
 
 const palette = [
   {
+    type: 'INPUT',
+    label: 'Input',
+    config: { validateTransaction: true, logEntry: true },
+  },
+  {
     type: 'GEO_CHECK',
     label: 'Geo Check',
     config: { allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'], action: 'FLAG' },
