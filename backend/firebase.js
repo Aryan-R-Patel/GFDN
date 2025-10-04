@@ -9,7 +9,7 @@ const dotEnvPath = resolve(__dirname, '.env');
 dotenv.config({ path: dotEnvPath });
 
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get } from 'firebase/database';
+import { getDatabase, ref, get, set } from 'firebase/database';
 
 const FIREBASE_REALTIME_DB = process.env.FIREBASE_REALTIME_DB;
 
@@ -31,4 +31,9 @@ async function fetchAll(path = '/') {
   return snap.exists() ? snap.val() : null;
 }
 
-export { app, database, fetchAll };
+async function writeData(path, data) {
+  const dbRef = ref(database, path);
+  await set(dbRef, data);
+}
+
+export { app, database, fetchAll, writeData };
