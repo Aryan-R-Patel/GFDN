@@ -15,45 +15,129 @@ const palette = [
     type: 'INPUT',
     label: 'Input',
     config: { validateTransaction: true, logEntry: true },
+    reactType: 'input',
   },
   {
     type: 'GEO_CHECK',
     label: 'Geo Check',
     config: { allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'], action: 'FLAG' },
+    reactType: 'default',
   },
   {
     type: 'VELOCITY_CHECK',
     label: 'Velocity Check',
     config: { maxPerWindow: 6, windowMs: 60_000, flagOnly: true },
+    reactType: 'default',
   },
   {
     type: 'AI_ANOMALY',
     label: 'AI Anomaly',
     config: { blockThreshold: 85, flagThreshold: 60 },
+    reactType: 'default',
   },
   {
     type: 'DECISION',
     label: 'Decision',
     config: { autoApproveBelow: 40, escalateOnFlag: true },
+    reactType: 'output',
   },
 ];
 
+const getReactNodeType = (workflowType) => {
+  if (workflowType === 'INPUT') return 'input';
+  if (workflowType === 'DECISION') return 'output';
+  return 'default';
+};
+
+const defaultInputConfig = { validateTransaction: true, logEntry: true };
+const defaultGeoConfig = { allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'], action: 'FLAG' };
+
+const createInputNode = (id = crypto.randomUUID()) => ({
+  id,
+  type: 'input',
+  position: { x: 120, y: 180 },
+  data: {
+    label: 'Input',
+    type: 'INPUT',
+    config: { ...defaultInputConfig },
+  },
+});
+
+const createGeoNode = (id = crypto.randomUUID()) => ({
+  id,
+  type: 'default',
+  position: { x: 360, y: 180 },
+  data: {
+    label: 'Geo Check',
+    type: 'GEO_CHECK',
+    config: { ...defaultGeoConfig },
+  },
+});
+
+const ensureInputAndGeo = (nodes, edges) => {
+  let workingNodes = [...nodes];
+  let workingEdges = [...edges];
+
+  let inputNode = workingNodes.find((node) => node.data?.type === 'INPUT');
+  if (!inputNode) {
+    inputNode = createInputNode();
+    workingNodes = [inputNode, ...workingNodes];
+  }
+
+  let geoNode = workingNodes.find((node) => node.data?.type === 'GEO_CHECK');
+  if (!geoNode) {
+    const xPosition = (inputNode?.position?.x ?? 120) + 220;
+    const yPosition = inputNode?.position?.y ?? 180;
+    geoNode = {
+      ...createGeoNode(),
+      position: { x: xPosition, y: yPosition },
+    };
+    workingNodes = [...workingNodes, geoNode];
+  }
+
+  const hasInputToGeoEdge = workingEdges.some(
+    (edge) => edge.source === inputNode.id && edge.target === geoNode.id,
+  );
+
+  if (!hasInputToGeoEdge) {
+    workingEdges = [
+      ...workingEdges,
+      {
+        id: crypto.randomUUID(),
+        source: inputNode.id,
+        target: geoNode.id,
+      },
+    ];
+  }
+
+  return { nodes: workingNodes, edges: workingEdges };
+};
+
 const cleanWorkflow = (workflow) => {
-  if (!workflow) return { nodes: [], edges: [] };
-  const nodes = workflow.nodes?.map((node) => ({
+  if (!workflow) {
+    return ensureInputAndGeo([], []);
+  }
+
+  let nodes =
+    workflow.nodes?.map((node) => ({
     id: node.id,
+    type: getReactNodeType(node.type),
     position: node.position || { x: Math.random() * 400, y: Math.random() * 200 },
     data: {
       label: node.label || node.type,
       type: node.type,
       config: node.config || {},
     },
-  }));
-  const edges = workflow.edges?.map((edge) => ({
+    })) ?? [];
+  let edges =
+    workflow.edges?.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
-  }));
+    })) ?? [];
+
+  ({ nodes, edges } = ensureInputAndGeo(nodes, edges));
+
   return { nodes, edges };
 };
 
@@ -90,27 +174,57 @@ export default function WorkflowEditor({ workflow }) {
     setEdges(initialEdges);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
 
-  const onConnect = useCallback(
-    (connection) => setEdges((eds) => addEdge({ ...connection, id: crypto.randomUUID() }, eds)),
+  // Restrict each node to one input and one output
+  const connectNodes = useCallback(
+    (connection) => {
+      setEdges((eds) => {
+        const filtered = eds.filter(
+          (edge) => edge.source !== connection.source && edge.target !== connection.target,
+        );
+        return addEdge({ ...connection, id: crypto.randomUUID() }, filtered);
+      });
+    },
     [setEdges],
   );
+
+  const onConnect = useCallback((connection) => connectNodes(connection), [connectNodes]);
 
   const onNodeClick = useCallback((_, node) => setSelectedNode(node), []);
 
   const handleAddNode = (paletteNode) => {
     const id = crypto.randomUUID();
-    setNodes((nds) => [
-      ...nds,
-      {
-        id,
-        position: { x: 100 + Math.random() * 400, y: 50 + Math.random() * 200 },
-        data: {
-          label: paletteNode.label,
-          type: paletteNode.type,
-          config: paletteNode.config,
-        },
+    const newNode = {
+      id,
+      type: paletteNode.reactType ?? getReactNodeType(paletteNode.type),
+      position: { x: 100 + Math.random() * 400, y: 50 + Math.random() * 200 },
+      data: {
+        label: paletteNode.label,
+        type: paletteNode.type,
+        config: JSON.parse(JSON.stringify(paletteNode.config ?? {})),
       },
-    ]);
+    };
+
+    const existingNodes = nodes;
+    const existingEdges = edges;
+
+    setNodes((nds) => [...nds, newNode]);
+
+    if (paletteNode.type !== 'INPUT') {
+      const tailCandidates = existingNodes.filter(
+        (node) =>
+          node.data?.type !== 'DECISION' &&
+          !existingEdges.some((edge) => edge.source === node.id),
+      );
+
+      const lastTailIndex = tailCandidates.length - 1;
+      let sourceNode =
+        (lastTailIndex >= 0 ? tailCandidates[lastTailIndex] : null) ??
+        existingNodes.find((node) => node.data?.type === 'INPUT');
+
+      if (sourceNode) {
+        connectNodes({ source: sourceNode.id, target: id });
+      }
+    }
   };
 
   const handleConfigChange = (event) => {
