@@ -1,5 +1,12 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// Load .env located next to this file (backend/.env) so scripts can run from any CWD
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const dotEnvPath = resolve(__dirname, '.env');
+dotenv.config({ path: dotEnvPath });
 
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get } from 'firebase/database';

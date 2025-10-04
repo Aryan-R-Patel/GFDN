@@ -5,9 +5,9 @@ import { dirname } from 'path';
 async function main() {
   console.log('Fetching transactions from Firebase Realtime Database...');
   try {
-    const data = await fetchAll('/');
+    const data = await fetchAll('/transactions');
     if (!data) {
-      console.log('No data found at the database root.');
+      console.log('No data found at /transactions.');
       return;
     }
 
