@@ -64,16 +64,20 @@ export default function AppView({
   }
 
   return (
+
+
     <div className="app">
-      {/* full-screen background globe */}
+
+     {/* full-screen background globe */}
       <div className="app__background" aria-hidden="true">
         <GlobeView transactions={transactions} />
       </div>
 
+
       {/* overlay content sits above the globe */}
       <div className="app__content">
-        <header className="app__header" style={{ pointerEvents: "none" }}>
-          <div>
+        <header className="app__header">
+          <div style={{ pointerEvents: "none" }}>
             <h1>Global Fraud Defense Network</h1>
             <p className="app__subtitle">
               Visual, real-time fraud defense with AI-guided workflows.
@@ -81,14 +85,13 @@ export default function AppView({
           </div>
         </header>
 
-        <main className="app__main-centered">
-          <div className="center-stage--overlay">
-            {/* optional overlay controls could go here */}
-          </div>
+        <main className="app__main-centered" style={{ pointerEvents: "none" }}>
 
           <div className="metrics-container">
             <DashboardMetrics metrics={metrics} />
           </div>
+
+
 
           <aside
             className={`chat-drawer ${chatOpen ? "chat-drawer--open" : ""}`}
@@ -104,7 +107,10 @@ export default function AppView({
             <div
               className="chat-drawer__resize-handle"
               onMouseDown={handleMouseDown}
-              style={{ cursor: isResizing ? "col-resize" : "ew-resize" }}
+              style={{
+                cursor: isResizing ? "col-resize" : "ew-resize",
+                pointerEvents: "auto",
+            }}
             />
             <div className="chat-drawer__header">
               <h3>Assistant Chat</h3>
@@ -127,6 +133,7 @@ export default function AppView({
               onClick={() => setChatOpen(true)}
               aria-expanded={chatOpen}
               aria-controls="chat-drawer"
+              style={{ pointerEvents: "auto" }}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -141,5 +148,6 @@ export default function AppView({
         </main>
       </div>
     </div>
+
   );
 }
