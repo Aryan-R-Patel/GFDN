@@ -4,12 +4,14 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
+import 'dotenv/config';
 
 import { TransactionGenerator } from './data/transactionGenerator.js';
 import { executeWorkflow } from './workflow/executor.js';
 import { nodeRegistry } from './workflow/nodes/index.js';
 import { MetricsManager } from './metrics.js';
 import { generateSuggestions } from './suggestions/engine.js';
+import chatbotService from './chatbot/service.js';
 
 const app = express();
 app.use(cors());
@@ -192,6 +194,28 @@ app.get('/api/transactions', (req, res) => {
 
 app.get('/api/suggestions', (req, res) => {
   res.json(suggestionsCache);
+});
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message, context } = req.body;
+    
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Generate a session ID based on request headers for conversation memory
+    const sessionId = chatbotService.getSessionId(req);
+    
+    const response = await chatbotService.generateResponse(message, context, sessionId);
+    res.json({ response });
+  } catch (error) {
+    console.error('Chat API error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      response: 'I apologize, but I encountered an error processing your request. Please try again.'
+    });
+  }
 });
 
 app.post('/api/actions/block', (req, res) => {
