@@ -58,7 +58,11 @@ export default function App() {
         </section>
         <section className="app__main-right">
           <WorkflowEditor workflow={workflow} />
-          <AIAssistant suggestions={suggestions} />
+          <AIAssistant 
+            suggestions={suggestions} 
+            metrics={metrics}
+            transactions={transactions}
+          />
         </section>
       </main>
     </div>
