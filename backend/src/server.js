@@ -339,7 +339,7 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 4000;
 
 // Callback to process Firebase transactions through the workflow
-function onFirebaseTransaction(transactionData, key) {
+async function onFirebaseTransaction(transactionData, key) {
   try {
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🔥 Processing Firebase Transaction through Workflow');
@@ -382,6 +382,17 @@ function onFirebaseTransaction(transactionData, key) {
     addRecentTransaction(enriched);
     io.emit('transaction:new', enriched);
     emitState();
+
+    const transactionKey = key || transaction.id;
+    if (transactionKey) {
+      try {
+        await writeData(`/transactions/${transactionKey}/decision`, result.decision.status);
+      } catch (persistError) {
+        console.error(`Failed to persist decision for transaction ${transactionKey}:`, persistError);
+      }
+    } else {
+      console.warn('Skipping decision persistence: missing transaction key');
+    }
 
     // Print the decision in the terminal
     const statusEmoji = result.decision.status === 'APPROVE' ? '✅' :
