@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 
 import { TransactionGenerator } from './data/transactionGenerator.js';
+import startWatcher from './data/watchTransactions.js';
 import { executeWorkflow } from './workflow/executor.js';
 import { nodeRegistry } from './workflow/nodes/index.js';
 import { MetricsManager } from './metrics.js';
@@ -336,6 +337,18 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 4000;
 
+// Start the watcher immediately (so its logs appear in the same terminal when nodemon runs)
+let watcherStopFn = null;
+startWatcher('/transactions')
+  .then((stopFn) => {
+    watcherStopFn = stopFn;
+  })
+  .catch((err) => {
+    console.error('Failed to start watcher:', err);
+  });
+
+httpServer.listen(PORT, () => {
+  console.log(`GFDN backend listening on port ${PORT}`);
 // Initialize server with Firebase workflow
 async function startServer() {
   await loadWorkflowFromFirebase();
@@ -349,4 +362,17 @@ async function startServer() {
 startServer().catch((error) => {
   console.error('Failed to start server:', error);
   process.exit(1);
+});
+
+process.on('SIGINT', () => {
+  try {
+    watcherStopFn && watcherStopFn();
+  } catch (e) {
+    console.warn('Error stopping watcher:', e);
+  }
+  try {
+    process.exit(0);
+  } catch (e) {
+    process.exit(1);
+  }
 });
