@@ -1,0 +1,27 @@
+{
+  "name": "gfdn-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io-client": "^4.7.5",
+    "reactflow": "^11.10.4",
+    "zustand": "^4.5.2",
+    "swr": "^2.3.3",
+    "@react-three/fiber": "^8.16.6",
+    "@react-three/drei": "^9.114.5",
+    "three": "^0.159.0",
+    "dayjs": "^1.11.11"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "vite": "^5.4.3"
+  }
+}
