@@ -52,89 +52,158 @@ const workflowSchema = z.object({
     .default([]),
 });
 
-// Default workflow if Firebase doesn't have one
-const getDefaultWorkflow = () => ({
+// Hardcoded INPUT and DECISION nodes (never stored in Firebase)
+const INPUT_NODE_ID = 'system-input';
+const DECISION_NODE_ID = 'system-decision';
+
+const createInputNode = () => ({
+  id: INPUT_NODE_ID,
+  label: 'Input',
+  type: 'INPUT',
+  config: {
+    validateTransaction: true,
+    logEntry: true,
+  },
+  position: { x: 0, y: 0 },
+});
+
+const createDecisionNode = () => ({
+  id: DECISION_NODE_ID,
+  label: 'Decision',
+  type: 'DECISION',
+  config: {
+    autoApproveBelow: 40,
+    escalateOnFlag: true,
+  },
+  position: { x: 1000, y: 0 },
+});
+
+// Default middle nodes if Firebase doesn't have any
+const getDefaultMiddleNodes = () => [
+  {
+    id: 'geo-check',
+    label: 'Geo Check',
+    type: 'GEO_CHECK',
+    config: {
+      allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'],
+      action: 'FLAG',
+    },
+    position: { x: 250, y: 0 },
+  },
+  {
+    id: 'velocity-check',
+    label: 'Velocity Guard',
+    type: 'VELOCITY_CHECK',
+    config: {
+      maxPerWindow: 6,
+      flagOnly: true,
+    },
+    position: { x: 500, y: 0 },
+  },
+  {
+    id: 'anomaly',
+    label: 'AI Anomaly',
+    type: 'AI_ANOMALY',
+    config: {
+      blockThreshold: 85,
+      flagThreshold: 60,
+    },
+    position: { x: 750, y: 0 },
+  },
+];
+
+// Wrap middle nodes with INPUT and DECISION nodes
+function wrapWorkflowWithSystemNodes(middleNodesData) {
+  const middleNodes = middleNodesData.nodes || [];
+  const middleEdges = middleNodesData.edges || [];
+
+  const inputNode = createInputNode();
+  const decisionNode = createDecisionNode();
+
+  const allNodes = [inputNode, ...middleNodes, decisionNode];
+
+  // Find first and last middle node
+  const firstMiddleNode = middleNodes[0];
+  const lastMiddleNode = middleNodes[middleNodes.length - 1];
+
+  const systemEdges = [];
+
+  // Connect INPUT to first middle node
+  if (firstMiddleNode) {
+    systemEdges.push({
+      id: 'system-input-edge',
+      source: INPUT_NODE_ID,
+      target: firstMiddleNode.id,
+    });
+  }
+
+  // Connect last middle node to DECISION
+  if (lastMiddleNode) {
+    systemEdges.push({
+      id: 'system-decision-edge',
+      source: lastMiddleNode.id,
+      target: DECISION_NODE_ID,
+    });
+  }
+
+  const allEdges = [...systemEdges, ...middleEdges];
+
+  return {
+    id: middleNodesData.id || uuid(),
+    name: middleNodesData.name || 'Fraud Workflow',
+    version: middleNodesData.version || 1,
+    nodes: allNodes,
+    edges: allEdges,
+  };
+}
+
+let activeWorkflow = wrapWorkflowWithSystemNodes({
   id: uuid(),
   name: 'Default Risk Flow',
   version: 1,
-  nodes: [
-    {
-      id: 'input-node',
-      label: 'Input',
-      type: 'INPUT',
-      config: {
-        validateTransaction: true,
-        logEntry: true,
-      },
-      position: { x: 0, y: 0 },
-    },
-    {
-      id: 'geo-check',
-      label: 'Geo Check',
-      type: 'GEO_CHECK',
-      config: {
-        allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'],
-        action: 'FLAG',
-      },
-      position: { x: 250, y: 0 },
-    },
-    {
-      id: 'velocity-check',
-      label: 'Velocity Guard',
-      type: 'VELOCITY_CHECK',
-      config: {
-        maxPerWindow: 6,
-        flagOnly: true,
-      },
-      position: { x: 500, y: 0 },
-    },
-    {
-      id: 'anomaly',
-      label: 'AI Anomaly',
-      type: 'AI_ANOMALY',
-      config: {
-        blockThreshold: 85,
-        flagThreshold: 60,
-      },
-      position: { x: 750, y: 0 },
-    },
-    {
-      id: 'decision',
-      label: 'Decision',
-      type: 'DECISION',
-      config: {
-        autoApproveBelow: 40,
-        escalateOnFlag: true,
-      },
-      position: { x: 1000, y: 0 },
-    },
-  ],
+  nodes: getDefaultMiddleNodes(),
   edges: [
-    { id: 'e1', source: 'input-node', target: 'geo-check' },
-    { id: 'e2', source: 'geo-check', target: 'velocity-check' },
-    { id: 'e3', source: 'velocity-check', target: 'anomaly' },
-    { id: 'e4', source: 'anomaly', target: 'decision' },
+    { id: 'e1', source: 'geo-check', target: 'velocity-check' },
+    { id: 'e2', source: 'velocity-check', target: 'anomaly' },
   ],
 });
-
-let activeWorkflow = getDefaultWorkflow();
 
 // Load workflow from Firebase on startup
 async function loadWorkflowFromFirebase() {
   try {
-    const workflowData = await fetchAll('/workflow');
-    if (workflowData) {
-      console.log('Loaded workflow from Firebase:', workflowData.name);
-      activeWorkflow = workflowData;
+    const middleNodesData = await fetchAll('/workflow');
+    if (middleNodesData) {
+      console.log('Loaded workflow from Firebase:', middleNodesData.name || 'Unnamed');
+      activeWorkflow = wrapWorkflowWithSystemNodes(middleNodesData);
     } else {
       console.log('No workflow found in Firebase, using default and saving it');
-      activeWorkflow = getDefaultWorkflow();
-      await writeData('/workflow', activeWorkflow);
+      const defaultMiddleNodes = {
+        id: uuid(),
+        name: 'Default Risk Flow',
+        version: 1,
+        nodes: getDefaultMiddleNodes(),
+        edges: [
+          { id: 'e1', source: 'geo-check', target: 'velocity-check' },
+          { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+        ],
+      };
+      await writeData('/workflow', defaultMiddleNodes);
+      activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
     }
   } catch (error) {
     console.error('Failed to load workflow from Firebase:', error);
     console.log('Using default workflow');
-    activeWorkflow = getDefaultWorkflow();
+    const defaultMiddleNodes = {
+      id: uuid(),
+      name: 'Default Risk Flow',
+      version: 1,
+      nodes: getDefaultMiddleNodes(),
+      edges: [
+        { id: 'e1', source: 'geo-check', target: 'velocity-check' },
+        { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+      ],
+    };
+    activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
   }
 }
 
@@ -205,19 +274,35 @@ app.post('/api/workflows/active', async (req, res) => {
     return res.status(400).json({ error: 'Invalid workflow schema', details: parseResult.error.flatten() });
   }
 
-  activeWorkflow = {
-    ...parseResult.data,
+  // Extract middle nodes (filter out INPUT and DECISION)
+  const middleNodes = parseResult.data.nodes.filter(
+    (node) => node.type !== 'INPUT' && node.type !== 'DECISION'
+  );
+
+  // Extract middle edges (filter out system edges)
+  const middleEdges = parseResult.data.edges.filter(
+    (edge) => edge.source !== INPUT_NODE_ID && edge.target !== DECISION_NODE_ID
+  );
+
+  const middleNodesData = {
+    id: parseResult.data.id,
+    name: parseResult.data.name,
     version: (activeWorkflow.version || 1) + 1,
+    nodes: middleNodes,
+    edges: middleEdges,
     updatedAt: new Date().toISOString(),
   };
 
-  // Save to Firebase
+  // Save only middle nodes to Firebase
   try {
-    await writeData('/workflow', activeWorkflow);
-    console.log('Workflow saved to Firebase');
+    await writeData('/workflow', middleNodesData);
+    console.log('Workflow saved to Firebase (middle nodes only)');
   } catch (error) {
     console.error('Failed to save workflow to Firebase:', error);
   }
+
+  // Wrap with system nodes for active workflow
+  activeWorkflow = wrapWorkflowWithSystemNodes(middleNodesData);
 
   velocityCache.clear();
   res.json({ status: 'updated', workflow: activeWorkflow });
