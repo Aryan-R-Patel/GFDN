@@ -92,9 +92,15 @@ const ensureSystemNodes = (nodes, edges) => {
     selectable: false,
   };
 
-  // Find first and last middle node
-  const firstMiddleNode = workingNodes[0];
-  const lastMiddleNode = workingNodes[workingNodes.length - 1];
+  // Find first node (no incoming edges from middle nodes)
+  const firstMiddleNode = workingNodes.find((node) =>
+    !workingEdges.some((edge) => edge.target === node.id)
+  );
+
+  // Find last node (no outgoing edges to middle nodes)
+  const lastMiddleNode = workingNodes.find((node) =>
+    !workingEdges.some((edge) => edge.source === node.id)
+  );
 
   // Create system edges
   const systemEdges = [];
