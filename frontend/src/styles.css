@@ -444,6 +444,34 @@ button {
   cursor: not-allowed;
 }
 
+.chatbot__clear-btn {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 2.5rem;
+}
+
+.chatbot__clear-btn:hover {
+  background: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.panel__header > div {
+  flex: 1;
+}
+
 .muted {
   color: #94a3b8;
 }

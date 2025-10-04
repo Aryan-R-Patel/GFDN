@@ -204,7 +204,10 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const response = await chatbotService.generateResponse(message, context);
+    // Generate a session ID based on request headers for conversation memory
+    const sessionId = chatbotService.getSessionId(req);
+    
+    const response = await chatbotService.generateResponse(message, context, sessionId);
     res.json({ response });
   } catch (error) {
     console.error('Chat API error:', error);

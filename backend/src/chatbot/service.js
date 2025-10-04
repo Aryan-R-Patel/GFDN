@@ -17,15 +17,71 @@ class ChatbotService {
       }
     });
     console.log('Using model: gemini-2.5-flash');
+    
+    // Memory storage for conversation history
+    this.conversationMemory = new Map();
+    this.maxMemoryLength = 10; // Keep last 10 exchanges per session
   }
 
-  async generateResponse(userMessage, context = {}) {
+  getSessionId(req) {
+    // First try to use the session ID from the frontend
+    const customSessionId = req.get('X-Session-ID');
+    if (customSessionId) {
+      return customSessionId;
+    }
+    
+    // Fallback to IP + User Agent for session identification
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const userAgent = req.get('User-Agent') || 'unknown';
+    return `${ip}_${userAgent}`.substring(0, 50);
+  }
+
+  addToMemory(sessionId, userMessage, botResponse) {
+    if (!this.conversationMemory.has(sessionId)) {
+      this.conversationMemory.set(sessionId, []);
+    }
+    
+    const memory = this.conversationMemory.get(sessionId);
+    memory.push({
+      user: userMessage,
+      assistant: botResponse,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Keep only the last N exchanges to prevent memory bloat
+    if (memory.length > this.maxMemoryLength) {
+      memory.shift();
+    }
+  }
+
+  getConversationHistory(sessionId) {
+    return this.conversationMemory.get(sessionId) || [];
+  }
+
+  formatConversationHistory(history) {
+    if (history.length === 0) return '';
+    
+    return '\n\nPrevious conversation:\n' + 
+      history.map(exchange => 
+        `Human: ${exchange.user}\nAssistant: ${exchange.assistant}`
+      ).join('\n') + '\n';
+  }
+
+  async generateResponse(userMessage, context = {}, sessionId = 'default') {
     try {
       console.log('Generating response for message:', userMessage);
+      console.log('Session ID:', sessionId);
+      
       const { metrics, recentTransactions, suggestions } = context;
       
-      // Create a comprehensive prompt with context
+      // Get conversation history for this session
+      const history = this.getConversationHistory(sessionId);
+      const conversationContext = this.formatConversationHistory(history);
+      
+      // Create a comprehensive prompt with context and memory
       const systemPrompt = `You are an AI Fraud Assistant for a Global Fraud Defense Network. You help analysts understand fraud patterns, optimize workflows, and analyze transactions.
+
+IMPORTANT: You have memory of previous conversations with this user. Use this context to provide personalized responses and remember details they've shared (like their name, preferences, previous questions, etc.).
 
 Current System Context:
 ${metrics ? `
@@ -48,11 +104,13 @@ Current Suggestions: ${suggestions.length} active suggestions
 ${suggestions.slice(0, 2).map(s => `- ${s.priority}: ${s.title}`).join('\n')}
 ` : ''}
 
-Please provide helpful, accurate responses about fraud detection, prevention strategies, workflow optimization, and transaction analysis. Keep responses concise but informative.`;
+${conversationContext}
+
+Please provide helpful, accurate responses about fraud detection, prevention strategies, workflow optimization, and transaction analysis. Remember details from our conversation and reference them when relevant. Keep responses concise but informative.`;
 
       const prompt = `${systemPrompt}
 
-User Question: ${userMessage}
+Current User Message: ${userMessage}
 
 Please provide a helpful response:`;
 
@@ -64,6 +122,10 @@ Please provide a helpful response:`;
       const text = response.text();
       console.log('Response text length:', text.length);
       
+      // Store this exchange in memory
+      this.addToMemory(sessionId, userMessage, text);
+      console.log(`Stored conversation in memory for session: ${sessionId}`);
+      
       return text;
     } catch (error) {
       console.error('Detailed error generating chatbot response:', error);
@@ -71,13 +133,22 @@ Please provide a helpful response:`;
       console.error('Error stack:', error.stack);
       
       // Provide a more helpful fallback response based on the user's question
-      if (userMessage.toLowerCase().includes('fraud')) {
-        return `I understand you're asking about fraud detection. While I'm experiencing technical difficulties connecting to my AI service, I can share that effective fraud detection typically involves monitoring transaction patterns, velocity checks, geographic analysis, and anomaly detection. Would you like me to help analyze your current system metrics instead?`;
-      } else if (userMessage.toLowerCase().includes('transaction')) {
-        return `I see you're asking about transactions. Common fraud indicators include unusual transaction amounts, rapid-fire transactions from the same account, transactions from high-risk geographic locations, and deviations from normal spending patterns. Check your current workflow for these patterns.`;
-      } else {
-        return `I'm experiencing technical difficulties with my AI service right now, but I'm here to help with fraud detection and prevention. You can ask me about transaction analysis, workflow optimization, or fraud patterns. I'll do my best to provide helpful guidance based on your current system data.`;
-      }
+      const fallbackResponse = this.getFallbackResponse(userMessage);
+      
+      // Still store the exchange in memory even for fallback responses
+      this.addToMemory(sessionId, userMessage, fallbackResponse);
+      
+      return fallbackResponse;
+    }
+  }
+
+  getFallbackResponse(userMessage) {
+    if (userMessage.toLowerCase().includes('fraud')) {
+      return `I understand you're asking about fraud detection. While I'm experiencing technical difficulties connecting to my AI service, I can share that effective fraud detection typically involves monitoring transaction patterns, velocity checks, geographic analysis, and anomaly detection. Would you like me to help analyze your current system metrics instead?`;
+    } else if (userMessage.toLowerCase().includes('transaction')) {
+      return `I see you're asking about transactions. Common fraud indicators include unusual transaction amounts, rapid-fire transactions from the same account, transactions from high-risk geographic locations, and deviations from normal spending patterns. Check your current workflow for these patterns.`;
+    } else {
+      return `I'm experiencing technical difficulties with my AI service right now, but I'm here to help with fraud detection and prevention. You can ask me about transaction analysis, workflow optimization, or fraud patterns. I'll do my best to provide helpful guidance based on your current system data.`;
     }
   }
 }

@@ -4,7 +4,7 @@ export default function AIAssistant({ suggestions = [], metrics, transactions })
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Hello! I'm your AI Fraud Assistant powered by Gemini. Ask me about fraud patterns, workflow optimization, or transaction analysis.",
+      text: "Hello! I'm your AI Fraud Assistant powered by Gemini. I have memory of our conversation, so feel free to refer back to things we've discussed. Ask me about fraud patterns, workflow optimization, or transaction analysis.",
       sender: 'bot',
       timestamp: new Date()
     }
@@ -12,6 +12,16 @@ export default function AIAssistant({ suggestions = [], metrics, transactions })
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Generate a persistent session ID for this browser session
+  const [sessionId] = useState(() => {
+    let id = localStorage.getItem('fraud-assistant-session');
+    if (!id) {
+      id = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('fraud-assistant-session', id);
+    }
+    return id;
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -40,6 +50,7 @@ export default function AIAssistant({ suggestions = [], metrics, transactions })
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Session-ID': sessionId, // Send session ID for memory tracking
         },
         body: JSON.stringify({
           message: inputMessage,
@@ -75,6 +86,22 @@ export default function AIAssistant({ suggestions = [], metrics, transactions })
     }
   };
 
+  const clearConversation = () => {
+    // Reset messages to initial state
+    setMessages([
+      {
+        id: 1,
+        text: "Hello! I'm your AI Fraud Assistant powered by Gemini. I have memory of our conversation, so feel free to refer back to things we've discussed. Ask me about fraud patterns, workflow optimization, or transaction analysis.",
+        sender: 'bot',
+        timestamp: new Date()
+      }
+    ]);
+    
+    // Generate new session ID to start fresh
+    const newSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('fraud-assistant-session', newSessionId);
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -85,8 +112,17 @@ export default function AIAssistant({ suggestions = [], metrics, transactions })
   return (
     <div className="panel panel--assistant">
       <div className="panel__header">
-        <h2>AI Fraud Chatbot</h2>
-        <p className="muted">Ask me anything about fraud detection and prevention.</p>
+        <div>
+          <h2>AI Fraud Chatbot</h2>
+          <p className="muted">Ask me anything about fraud detection and prevention.</p>
+        </div>
+        <button 
+          onClick={clearConversation}
+          className="chatbot__clear-btn"
+          title="Clear conversation memory"
+        >
+          🔄
+        </button>
       </div>
       <div className="chatbot">
         <div className="chatbot__messages">
