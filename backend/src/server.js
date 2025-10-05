@@ -12,7 +12,7 @@ import { executeWorkflow } from './workflow/executor.js';
 import { nodeRegistry } from './workflow/nodes/index.js';
 import { MetricsManager } from './metrics.js';
 import { generateSuggestions } from './suggestions/engine.js';
-import { fetchAll, writeData } from '../firebase.js';
+import { fetchAll, writeData, pushData } from '../firebase.js';
 import chatbotService from './chatbot/service.js';
 import voiceService from './chatbot/voiceService.js';
 
@@ -55,6 +55,93 @@ const workflowSchema = z.object({
     )
     .default([]),
 });
+
+const locationSchema = z.object({
+  city: z.string().trim().min(1, 'Origin/destination city is required'),
+  country: z
+    .string()
+    .trim()
+    .min(2, 'Country code must have at least 2 characters')
+    .transform((value) => value.toUpperCase()),
+  region: z.string().trim().min(1, 'Region is required'),
+  lat: z.coerce.number().finite('Latitude must be a number'),
+  lng: z.coerce.number().finite('Longitude must be a number'),
+});
+
+const manualTransactionSchema = z.object({
+  id: z.string().trim().min(1).optional(),
+  amount: z.coerce.number().positive('Amount must be positive'),
+  currency: z
+    .string()
+    .trim()
+    .min(1, 'Currency is required')
+    .transform((value) => value.toUpperCase()),
+  timestamp: z.string().datetime().optional(),
+  payment_method: z.string().trim().min(1, 'Payment method is required'),
+  device_id: z.string().trim().min(1, 'Device ID is required'),
+  display: z.string().trim().optional(),
+  route_display: z.string().trim().optional(),
+  latency_ms: z.coerce.number().nonnegative().optional(),
+  metadata: z
+    .object({
+      note: z.string().trim().optional(),
+    })
+    .optional(),
+  origin: locationSchema,
+  destination: locationSchema,
+});
+
+function normalizeManualTransaction(input) {
+  const now = new Date().toISOString();
+  const transactionId = input.id?.trim() || uuid();
+  const timestamp = input.timestamp || now;
+
+  const origin = {
+    ...input.origin,
+    deviceId: input.device_id,
+  };
+
+  const destination = {
+    ...input.destination,
+  };
+
+  const metadata = {
+    paymentMethod: input.payment_method,
+    ...(input.metadata?.note ? { note: input.metadata.note } : {}),
+  };
+
+  const defaultRouteDisplay = `${origin.country} → ${destination.country} (${origin.region} → ${destination.region})`;
+
+  return {
+    id: transactionId,
+    amount: input.amount,
+    currency: input.currency,
+    timestamp,
+    origin,
+    destination,
+    metadata,
+    device_id: input.device_id,
+    payment_method: input.payment_method,
+    display:
+      input.display ||
+      `${new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: input.currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(input.amount)} • ${input.payment_method}`,
+    route_display: input.route_display || defaultRouteDisplay,
+    latency_ms: input.latency_ms ?? 0,
+    decision: 'PENDING',
+    decisionDetails: {
+      status: 'PENDING',
+      reason: 'Awaiting workflow decision',
+    },
+    decision_reason: 'Awaiting workflow decision',
+    createdAt: now,
+    source: 'manual',
+  };
+}
 
 // Hardcoded INPUT and DECISION nodes (never stored in Firebase)
 const INPUT_NODE_ID = 'system-input';
@@ -279,6 +366,7 @@ async function processTransaction(transaction) {
     history: result.history,
     processedAt: new Date().toISOString(),
     latency,
+    source: transaction.source || 'simulated',
   };
 
   addRecentTransaction(enriched);
@@ -359,6 +447,124 @@ app.get('/api/metrics', (req, res) => {
 app.get('/api/transactions', (req, res) => {
   const limit = Number(req.query.limit) || 50;
   res.json(recentTransactions.slice(-limit).reverse());
+});
+
+app.post('/api/transactions/manual', async (req, res) => {
+  const parseResult = manualTransactionSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      error: 'Invalid transaction payload',
+      details: parseResult.error.flatten(),
+    });
+  }
+
+  const normalized = normalizeManualTransaction(parseResult.data);
+
+  try {
+    const firebaseKey = await pushData('/transactions', normalized);
+    console.log('Manual transaction queued for workflow:', normalized.id, '→ key:', firebaseKey);
+    return res.status(201).json({
+      status: 'queued',
+      transactionId: normalized.id,
+      firebaseKey,
+    });
+  } catch (error) {
+    console.error('Failed to write manual transaction to Firebase:', error);
+    return res.status(500).json({ error: 'Failed to enqueue transaction' });
+  }
+});
+
+app.get('/api/transactions/live', async (req, res) => {
+  try {
+    const raw = await fetchAll('/transactions');
+    if (!raw) {
+      return res.json([]);
+    }
+
+    const records = Object.entries(raw).map(([key, value]) => {
+      const valueObj = value && typeof value === 'object' ? value : {};
+      const lastWorkflowResult = valueObj.lastWorkflowResult && typeof valueObj.lastWorkflowResult === 'object'
+        ? valueObj.lastWorkflowResult
+        : null;
+      const safeMetadata = valueObj.metadata && typeof valueObj.metadata === 'object' ? valueObj.metadata : {};
+      const mergedMetadata = {
+        paymentMethod:
+          safeMetadata.paymentMethod ||
+          lastWorkflowResult?.transaction?.metadata?.paymentMethod ||
+          valueObj.payment_method ||
+          'unknown',
+        ...(safeMetadata.note ? { note: safeMetadata.note } : {}),
+      };
+
+      const transactionBase = lastWorkflowResult?.transaction || {};
+
+      const transaction = {
+        id: transactionBase.id || valueObj.id || key,
+        amount: transactionBase.amount ?? valueObj.amount,
+        currency: transactionBase.currency ?? valueObj.currency,
+        timestamp: transactionBase.timestamp ?? valueObj.timestamp,
+        origin: transactionBase.origin || valueObj.origin || {},
+        destination: transactionBase.destination || valueObj.destination || {},
+        metadata: {
+          ...(transactionBase.metadata || {}),
+          ...mergedMetadata,
+        },
+        device_id: transactionBase.device_id || valueObj.device_id,
+        payment_method: transactionBase.payment_method || valueObj.payment_method,
+        display: transactionBase.display || valueObj.display,
+        route_display: transactionBase.route_display || valueObj.route_display,
+        latency_ms: valueObj.latency_ms ?? lastWorkflowResult?.latency ?? null,
+        source: transactionBase.source || valueObj.source || 'firebase',
+      };
+
+      const storedDecisionDetails = (valueObj.decisionDetails && typeof valueObj.decisionDetails === 'object'
+        ? valueObj.decisionDetails
+        : null) || (lastWorkflowResult?.decision && typeof lastWorkflowResult.decision === 'object'
+        ? lastWorkflowResult.decision
+        : null);
+
+      const status = valueObj.decision || storedDecisionDetails?.status || 'PENDING';
+      const reason = storedDecisionDetails?.reason || valueObj.decision_reason;
+
+      return {
+        id: transaction.id,
+        transaction,
+        decision: {
+          status,
+          reason:
+            reason ||
+            (status === 'PENDING' ? 'Awaiting workflow decision' : 'Decision synced from workflow'),
+          ...(storedDecisionDetails?.severity ? { severity: storedDecisionDetails.severity } : {}),
+          ...(storedDecisionDetails?.metadata ? { metadata: storedDecisionDetails.metadata } : {}),
+        },
+        history: Array.isArray(valueObj.history)
+          ? valueObj.history
+          : Array.isArray(lastWorkflowResult?.history)
+            ? lastWorkflowResult.history
+            : [],
+        processedAt:
+          valueObj.processedAt ||
+          valueObj.lastWorkflowRun?.executedAt ||
+          lastWorkflowResult?.processedAt ||
+          valueObj.timestamp ||
+          null,
+        latency: typeof valueObj.latency_ms === 'number' ? valueObj.latency_ms : lastWorkflowResult?.latency ?? null,
+        source: transaction.source || 'firebase',
+        firebaseKey: key,
+      };
+    });
+
+    records.sort((a, b) => {
+      const aTs = a.transaction.timestamp ? Date.parse(a.transaction.timestamp) : 0;
+      const bTs = b.transaction.timestamp ? Date.parse(b.transaction.timestamp) : 0;
+      return bTs - aTs;
+    });
+
+    res.json(records.slice(0, 200));
+  } catch (error) {
+    console.error('Failed to fetch live transactions from Firebase:', error);
+    res.status(500).json({ error: 'Failed to read live transactions' });
+  }
 });
 
 app.get('/api/suggestions', (req, res) => {
@@ -492,6 +698,8 @@ async function onFirebaseTransaction(transactionData, key) {
       ...transactionData
     };
 
+    transaction.source = transaction.source || 'firebase';
+
     const services = {
       metrics,
       velocityCache,
@@ -514,6 +722,7 @@ async function onFirebaseTransaction(transactionData, key) {
       history: result.history,
       processedAt: new Date().toISOString(),
       latency,
+      source: transaction.source || 'firebase',
     };
 
     // Add to recent transactions and emit to frontend
@@ -524,7 +733,29 @@ async function onFirebaseTransaction(transactionData, key) {
     const transactionKey = key || transaction.id;
     if (transactionKey) {
       try {
-        await writeData(`/transactions/${transactionKey}/decision`, result.decision.status);
+        const baseRecord = {
+          ...transactionData,
+          id: transaction.id,
+          decision: result.decision.status,
+          decisionDetails: {
+            status: result.decision.status,
+            reason: result.decision.reason,
+            ...(result.decision.severity ? { severity: result.decision.severity } : {}),
+            ...(result.decision.metadata ? { metadata: result.decision.metadata } : {}),
+          },
+          decision_reason: result.decision.reason,
+          history: result.history || [],
+          latency_ms: latency,
+          processedAt: enriched.processedAt,
+          lastWorkflowRun: {
+            workflowId: activeWorkflow.id,
+            workflowName: activeWorkflow.name,
+            executedAt: enriched.processedAt,
+          },
+          lastWorkflowResult: enriched,
+        };
+
+        await writeData(`/transactions/${transactionKey}`, baseRecord);
       } catch (persistError) {
         console.error(`Failed to persist decision for transaction ${transactionKey}:`, persistError);
       }
