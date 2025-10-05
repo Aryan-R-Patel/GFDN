@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import useGfdnStore from "../../store/useGfdnStore.js";
 import { useSocketConnection } from "../../hooks/useSocket.js";
 import AppView from "../views/AppView.jsx";
+import WorkflowPage from "../../pages/WorkflowPage.jsx";
+import AdminPage from "../../pages/AdminPage.jsx";
 
 // Presenter: coordinates models (store + socket) and passes plain props to the view.
 export default function AppPresenter() {
@@ -11,7 +14,7 @@ export default function AppPresenter() {
   const workflow = useGfdnStore(state => state.workflow);
   const suggestions = useGfdnStore(state => state.suggestions);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const navigate = useNavigate();
 
   // initialize socket listeners (they update the store directly)
   useSocketConnection();
@@ -36,17 +39,47 @@ export default function AppPresenter() {
       mounted = false;
     };
   }, [fetchInitialData]);
+  const loadingScreen = (
+    <div className="app app--loading">
+      <div className="loading-card">
+        <h1>Global Fraud Defense Network</h1>
+        <p>Bootstrapping your personalized fraud cockpit…</p>
+      </div>
+    </div>
+  );
 
   return (
-    <AppView
-      loading={loading}
-      metrics={metrics}
-      transactions={transactions}
-      workflow={workflow}
-      suggestions={suggestions}
-      currentPage={currentPage}
-      onNavigateToWorkflow={() => setCurrentPage('workflow')}
-      onNavigateToDashboard={() => setCurrentPage('dashboard')}
-    />
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <AppView
+            loading={loading}
+            metrics={metrics}
+            transactions={transactions}
+            suggestions={suggestions}
+            onNavigateToWorkflow={() => navigate('/workflow')}
+            onNavigateToAdmin={() => navigate('/admin')}
+          />
+        }
+      />
+      <Route
+        path="/workflow"
+        element={
+          loading
+            ? loadingScreen
+            : (
+              <div className="app">
+                <WorkflowPage workflow={workflow} onBack={() => navigate('/')} />
+              </div>
+            )
+        }
+      />
+      <Route
+        path="/admin"
+        element={<AdminPage onBack={() => navigate('/')} />}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

@@ -9,7 +9,7 @@ const dotEnvPath = resolve(__dirname, '.env');
 dotenv.config({ path: dotEnvPath });
 
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, set } from 'firebase/database';
+import { getDatabase, ref, get, set, push, update } from 'firebase/database';
 
 const FIREBASE_REALTIME_DB = process.env.FIREBASE_REALTIME_DB;
 
@@ -36,4 +36,15 @@ async function writeData(path, data) {
   await set(dbRef, data);
 }
 
-export { app, database, fetchAll, writeData };
+async function pushData(path, data) {
+  const dbRef = ref(database, path);
+  const newRef = await push(dbRef, data);
+  return newRef.key;
+}
+
+async function updateData(path, data) {
+  const dbRef = ref(database, path);
+  await update(dbRef, data);
+}
+
+export { app, database, fetchAll, writeData, pushData, updateData };

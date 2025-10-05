@@ -2,17 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import GlobeView from "../../components/GlobeView.jsx";
 import DashboardMetrics from "../../components/DashboardMetrics.jsx";
 import AIAssistant from "../../components/AIAssistant.jsx";
-import WorkflowPage from "../../pages/WorkflowPage.jsx";
+import TransactionSummary from "../../components/TransactionSummary.jsx";
 
 export default function AppView({
   loading,
   metrics,
   transactions,
-  workflow,
   suggestions,
-  currentPage,
   onNavigateToWorkflow,
-  onNavigateToDashboard,
+  onNavigateToAdmin,
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(380);
@@ -68,14 +66,6 @@ export default function AppView({
   }
 
   // Show workflow page if on workflow page
-  if (currentPage === 'workflow') {
-    return (
-      <div className="app">
-        <WorkflowPage workflow={workflow} onBack={onNavigateToDashboard} />
-      </div>
-    );
-  }
-
   return (
 
 
@@ -96,17 +86,32 @@ export default function AppView({
               Visual, real-time fraud defense with AI-guided workflows.
             </p>
           </div>
-          <button
-            className="workflow-nav-button"
-            onClick={onNavigateToWorkflow}
+          <div
+            className="app__header-buttons"
             style={{ pointerEvents: "auto" }}
           >
-            <span className="workflow-nav-button__icon">⚙️</span>
-            Edit Workflow
-          </button>
+            <button
+              className="workflow-nav-button workflow-nav-button--ghost"
+              onClick={onNavigateToAdmin}
+            >
+              <span className="workflow-nav-button__icon">🛠️</span>
+              Admin Console
+            </button>
+            <button
+              className="workflow-nav-button"
+              onClick={onNavigateToWorkflow}
+            >
+              <span className="workflow-nav-button__icon">⚙️</span>
+              Edit Workflow
+            </button>
+          </div>
         </header>
 
         <main className="app__main-centered" style={{ pointerEvents: "none" }}>
+
+          <div className="summary-stack">
+            <TransactionSummary transactions={transactions} />
+          </div>
 
           <div className="metrics-container">
             <DashboardMetrics metrics={metrics} />

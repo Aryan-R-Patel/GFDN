@@ -4,9 +4,12 @@ const decisionBadges = {
   APPROVE: 'badge badge--approve',
   FLAG: 'badge badge--flag',
   BLOCK: 'badge badge--block',
+  PENDING: 'badge badge--pending',
 };
 
 export default function TransactionFeed({ transactions = [] }) {
+  const feedItems = transactions.filter((item) => item && item.transaction);
+
   return (
     <div className="panel panel--feed">
       <div className="panel__header">
@@ -14,33 +17,45 @@ export default function TransactionFeed({ transactions = [] }) {
         <p>Latest 25 transactions</p>
       </div>
       <div className="feed">
-        {transactions.slice(0, 25).map((item) => (
-          <article key={item.id} className="feed__item">
-            <header>
-              <span className={decisionBadges[item.decision.status] || 'badge'}>
-                {item.decision.status}
-              </span>
-              <h3>
-                ${item.transaction.amount.toLocaleString()} {item.transaction.currency}{' '}
-                <span className="muted">• {item.transaction.metadata.paymentMethod}</span>
-              </h3>
-            </header>
-            <p>
-              {item.transaction.origin.country} → {item.transaction.destination.country}{' '}
-              <span className="muted">({item.transaction.origin.region} → {item.transaction.destination.region})</span>
-            </p>
-            <p className="muted">
-              {dayjs(item.transaction.timestamp).format('MMM D HH:mm:ss')} • Latency {item.latency} ms
-            </p>
-            <footer>
-              <small>
-                {item.history
-                  .map((node) => `${node.label || node.type}: ${node.status}`)
-                  .join(' → ')}
-              </small>
-            </footer>
-          </article>
-        ))}
+        {feedItems.slice(0, 25).map((item) => {
+          const status = item.decision?.status || 'PENDING';
+          const badgeClass = decisionBadges[status] || 'badge';
+          const transaction = item.transaction || {};
+          const amount = typeof transaction.amount === 'number' ? transaction.amount : 0;
+          const currency = transaction.currency || '';
+          const paymentMethod = transaction.metadata?.paymentMethod || transaction.payment_method || '—';
+          const origin = transaction.origin || {};
+          const destination = transaction.destination || {};
+          const timestamp = transaction.timestamp ? dayjs(transaction.timestamp) : null;
+          const historyTrail = Array.isArray(item.history) && item.history.length > 0
+            ? item.history.map((node) => `${node.label || node.type}: ${node.status}`).join(' → ')
+            : 'Awaiting workflow execution';
+
+          return (
+            <article key={item.id} className="feed__item">
+              <header>
+                <span className={badgeClass}>{status}</span>
+                <h3>
+                  ${amount.toLocaleString()} {currency}{' '}
+                  <span className="muted">• {paymentMethod}</span>
+                </h3>
+              </header>
+              <p>
+                {origin.country || '??'} → {destination.country || '??'}{' '}
+                <span className="muted">
+                  ({origin.region || 'Unknown'} → {destination.region || 'Unknown'})
+                </span>
+              </p>
+              <p className="muted">
+                {timestamp ? timestamp.format('MMM D HH:mm:ss') : 'Unknown time'} • Latency{' '}
+                {typeof item.latency === 'number' ? `${item.latency} ms` : '—'}
+              </p>
+              <footer>
+                <small>{historyTrail}</small>
+              </footer>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
