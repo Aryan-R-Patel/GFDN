@@ -86,7 +86,7 @@ export default function AppView({
   // workflow page
   if (currentPage === "workflow") {
     return (
-      <div className="app">
+      <div className="app app--full">
         <WorkflowPage workflow={workflow} onBack={onNavigateToDashboard} />
       </div>
     );

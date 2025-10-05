@@ -60,7 +60,7 @@ export default function anomalyDetection({ transaction, config = {}, services })
     services.metrics?.increment('anomalyBlock');
     return {
       status: 'BLOCK',
-      reason: `AI Anomaly score ${score} >= ${blockThreshold}.`,
+      reason: `Anomaly Check score ${score} >= ${blockThreshold}.`,
       severity: 'high',
       metadata: {
         ...metadata,
@@ -73,7 +73,7 @@ export default function anomalyDetection({ transaction, config = {}, services })
     services.metrics?.increment('anomalyFlag');
     return {
       status: 'FLAG',
-      reason: `AI Anomaly score ${score} >= ${flagThreshold}.`,
+      reason: `Anomaly Check score ${score} >= ${flagThreshold}.`,
       severity: 'medium',
       metadata: {
         ...metadata,
@@ -84,7 +84,7 @@ export default function anomalyDetection({ transaction, config = {}, services })
 
   return {
     status: 'CONTINUE',
-    reason: `AI Anomaly score ${score} below thresholds.`,
+    reason: `Anomaly Check score ${score} below thresholds.`,
     metadata: {
       ...metadata,
       riskScore: score,

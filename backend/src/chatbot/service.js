@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import voiceService from './voiceService.js';
 
 class ChatbotService {
   constructor() {
@@ -139,6 +140,24 @@ Please provide a helpful response:`;
       this.addToMemory(sessionId, userMessage, fallbackResponse);
       
       return fallbackResponse;
+    }
+  }
+
+  async generateVoiceResponse(userMessage, context = {}, sessionId = 'default', voiceId = null) {
+    try {
+      // First generate the text response
+      const textResponse = await this.generateResponse(userMessage, context, sessionId);
+      
+      // Then synthesize it to speech
+      const audioBuffer = await voiceService.synthesizeSpeech(textResponse, voiceId);
+      
+      return {
+        text: textResponse,
+        audio: audioBuffer
+      };
+    } catch (error) {
+      console.error('Error generating voice response:', error);
+      throw error;
     }
   }
 
