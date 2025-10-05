@@ -228,6 +228,7 @@ async function loadWorkflowFromFirebase() {
 }
 
 const generator = new TransactionGenerator(1200);
+const ENABLE_SIMULATOR = process.env.ENABLE_SIMULATOR !== 'false';
 
 function emitState() {
   const snapshot = metrics.snapshot();
@@ -284,8 +285,13 @@ async function processTransaction(transaction) {
   emitState();
 }
 
-generator.on('transaction', processTransaction);
-generator.start();
+if (ENABLE_SIMULATOR) {
+  generator.on('transaction', processTransaction);
+  generator.start();
+  console.log('Transaction simulator enabled (set ENABLE_SIMULATOR=false to disable).');
+} else {
+  console.log('Transaction simulator disabled via ENABLE_SIMULATOR env flag.');
+}
 
 setInterval(() => {
   suggestionsCache.splice(0, suggestionsCache.length, ...generateSuggestions({
