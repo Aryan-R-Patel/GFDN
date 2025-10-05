@@ -4,7 +4,7 @@ const decisionBadges = {
   APPROVE: 'badge badge--approve',
   FLAG: 'badge badge--flag',
   BLOCK: 'badge badge--block',
-  PENDING: 'badge badge--pending',
+  CONTINUE: 'badge badge--continue',
 };
 
 export default function TransactionFeed({ transactions = [] }) {
@@ -18,7 +18,7 @@ export default function TransactionFeed({ transactions = [] }) {
       </div>
       <div className="feed">
         {feedItems.slice(0, 25).map((item) => {
-          const status = item.decision?.status || 'PENDING';
+          const status = item.decision?.status || 'CONTINUE';
           const badgeClass = decisionBadges[status] || 'badge';
           const transaction = item.transaction || {};
           const amount = typeof transaction.amount === 'number' ? transaction.amount : 0;
