@@ -733,3 +733,327 @@ button {
     flex-direction: column;
   }
 }
+
+/* Voice Interface Styles */
+.chatbot__controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.chatbot__mode-btn {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 2.5rem;
+}
+
+.chatbot__mode-btn--active {
+  background: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.chatbot__mode-btn:hover {
+  background: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.chatbot__mode-btn--active:hover {
+  background: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.chatbot__visualizer {
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chatbot__mode-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chatbot__mode-text {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.audio-visualizer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.audio-visualizer__canvas {
+  background: rgba(30, 41, 59, 0.3);
+}
+
+.chatbot__replay-btn {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 0.5rem;
+  margin-right: 0.5rem;
+}
+
+.chatbot__replay-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+/* Voice Recorder Styles */
+.voice-recorder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.voice-recorder__buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.voice-recorder__btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(59, 130, 246, 0.8);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 120px;
+  justify-content: center;
+}
+
+.voice-recorder__btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 1);
+  transform: translateY(-1px);
+}
+
+.voice-recorder__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.voice-recorder__btn--active {
+  background: rgba(239, 68, 68, 0.8);
+  animation: pulse 2s infinite;
+}
+
+.voice-recorder__btn--active:hover {
+  background: rgba(239, 68, 68, 1);
+}
+
+.voice-recorder__btn--speech {
+  background: rgba(16, 185, 129, 0.8);
+}
+
+.voice-recorder__btn--speech:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 1);
+}
+
+.voice-recorder__btn--speech.voice-recorder__btn--active {
+  background: rgba(239, 68, 68, 0.8);
+}
+
+.voice-recorder__icon {
+  font-size: 1.1rem;
+}
+
+.voice-recorder__text {
+  font-size: 0.9rem;
+}
+
+.voice-recorder__indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.voice-recorder__pulse {
+  width: 1rem;
+  height: 1rem;
+  background: rgba(239, 68, 68, 0.8);
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+.voice-recorder__status {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Voice Demo Styles */
+.voice-demo {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.voice-demo h3 {
+  margin: 0 0 1rem 0;
+  color: #e2e8f0;
+  font-size: 1.25rem;
+}
+
+.voice-demo p {
+  margin: 0 0 1rem 0;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.voice-demo__features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.voice-demo__feature {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.voice-demo__feature h4 {
+  margin: 0 0 0.5rem 0;
+  color: #e2e8f0;
+  font-size: 1rem;
+}
+
+.voice-demo__feature p {
+  margin: 0 0 1rem 0;
+  font-size: 0.85rem;
+}
+
+.voice-demo__visualizer {
+  margin: 1rem 0;
+}
+
+.voice-demo__btn {
+  background: rgba(59, 130, 246, 0.8);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.voice-demo__btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 1);
+}
+
+.voice-demo__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-demo__mic {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60px;
+}
+
+.voice-demo__mic-btn {
+  background: rgba(16, 185, 129, 0.8);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice-demo__mic-btn:hover {
+  background: rgba(16, 185, 129, 1);
+  transform: scale(1.05);
+}
+
+.voice-demo__output {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60px;
+}
+
+.voice-demo__voice-name {
+  background: rgba(147, 51, 234, 0.2);
+  color: #a855f7;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.voice-demo__note {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-top: 1.5rem;
+}
+
+.voice-demo__note p {
+  margin: 0;
+  color: #fbbf24;
+  font-size: 0.85rem;
+}
