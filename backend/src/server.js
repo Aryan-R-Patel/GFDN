@@ -14,6 +14,7 @@ import { MetricsManager } from './metrics.js';
 import { generateSuggestions } from './suggestions/engine.js';
 import { fetchAll, writeData } from '../firebase.js';
 import chatbotService from './chatbot/service.js';
+import voiceService from './chatbot/voiceService.js';
 
 const app = express();
 app.use(cors());
@@ -343,6 +344,79 @@ app.post('/api/chat', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       response: 'I apologize, but I encountered an error processing your request. Please try again.'
+    });
+  }
+});
+
+// Voice chat endpoint
+app.post('/api/chat/voice', async (req, res) => {
+  try {
+    const { message, context, voiceId } = req.body;
+    
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if voice service is configured
+    if (!voiceService.isConfigured) {
+      // Fallback to text-only response
+      const sessionId = chatbotService.getSessionId(req);
+      const response = await chatbotService.generateResponse(message, context, sessionId);
+      
+      return res.json({ 
+        response: response,
+        audio: null,
+        audioFormat: null,
+        error: 'Voice synthesis not available - ElevenLabs API key not configured'
+      });
+    }
+
+    // Generate a session ID based on request headers for conversation memory
+    const sessionId = chatbotService.getSessionId(req);
+    
+    const voiceResponse = await chatbotService.generateVoiceResponse(message, context, sessionId, voiceId);
+    
+    // Send audio as base64 encoded string
+    const audioBase64 = voiceResponse.audio.toString('base64');
+    
+    res.json({ 
+      response: voiceResponse.text,
+      audio: audioBase64,
+      audioFormat: 'mp3'
+    });
+  } catch (error) {
+    console.error('Voice chat API error:', error);
+    
+    // Fallback to text-only response on error
+    try {
+      const sessionId = chatbotService.getSessionId(req);
+      const response = await chatbotService.generateResponse(req.body.message, req.body.context, sessionId);
+      
+      res.json({ 
+        response: response,
+        audio: null,
+        audioFormat: null,
+        error: 'Voice synthesis failed, falling back to text response'
+      });
+    } catch (fallbackError) {
+      res.status(500).json({ 
+        error: 'Internal server error',
+        response: 'I apologize, but I encountered an error processing your voice request. Please try again.'
+      });
+    }
+  }
+});
+
+// Get available voices
+app.get('/api/voices', async (req, res) => {
+  try {
+    const voices = await voiceService.getAvailableVoices();
+    res.json({ voices });
+  } catch (error) {
+    console.error('Voices API error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      voices: []
     });
   }
 });
