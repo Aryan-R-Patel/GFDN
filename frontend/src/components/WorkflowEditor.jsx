@@ -344,6 +344,7 @@ export default function WorkflowEditor({ workflow }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [configText, setConfigText] = useState("");
   const saveWorkflow = useGfdnStore(state => state.saveWorkflow);
   const isSaving = useGfdnStore(state => state.isSavingWorkflow);
 
@@ -351,6 +352,17 @@ export default function WorkflowEditor({ workflow }) {
     setNodes(initialNodes);
     setEdges(initialEdges);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!selectedNode) {
+      setConfigText("");
+      return;
+    }
+
+    setConfigText(
+      JSON.stringify(selectedNode.data?.config ?? {}, null, 2)
+    );
+  }, [selectedNode]);
 
   // Restrict each node to one input and one output
   const connectNodes = useCallback(
@@ -427,18 +439,26 @@ export default function WorkflowEditor({ workflow }) {
 
   const handleConfigChange = event => {
     if (!selectedNode) return;
+    const value = event.target.value;
+    setConfigText(value);
     try {
-      const parsed = JSON.parse(event.target.value || "{}");
-      setNodes(nds =>
-        nds.map(node =>
+      const parsed = JSON.parse(value || "{}");
+      setNodes(nds => {
+        const updated = nds.map(node =>
           node.id === selectedNode.id
             ? {
                 ...node,
                 data: { ...node.data, config: parsed },
               }
             : node
-        )
-      );
+        );
+
+        const refreshedNode = updated.find(node => node.id === selectedNode.id);
+        if (refreshedNode) {
+          setSelectedNode(refreshedNode);
+        }
+        return updated;
+      });
     } catch (_) {
       // ignore parse errors during typing
     }
@@ -696,11 +716,7 @@ export default function WorkflowEditor({ workflow }) {
                 Node type: {selectedNode.data.type}
               </small>
               <textarea
-                defaultValue={JSON.stringify(
-                  selectedNode.data.config ?? {},
-                  null,
-                  2
-                )}
+                value={configText}
                 onChange={handleConfigChange}
                 rows={16}
                 style={{
