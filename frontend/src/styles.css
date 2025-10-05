@@ -25,6 +25,9 @@ button {
   overflow: hidden;
 }
 
+.app--full { max-width: none; width: 100vw; margin: 0; padding: 0; }
+
+
 .app__content {
   position: fixed;
   top: 0;
@@ -490,8 +493,9 @@ button {
   min-height: 420px;
 }
 
-.workflow-page .workflow {
+.workflow-page {
   min-height: 65vh;
+  max-width: 100vw;
 }
 
 .workflow__palette {

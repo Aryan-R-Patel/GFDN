@@ -78,6 +78,7 @@ export default function GlobeView() {
   const [airports, setAirports] = useState([]);
   const [routes, setRoutes] = useState([]);
 
+  // Cleanup timeout on unmount
   useEffect(() => {
     let isMounted = true;
 
