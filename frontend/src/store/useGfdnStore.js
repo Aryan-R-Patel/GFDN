@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 
+const isRealTransaction = (record) => {
+  if (!record) return false;
+  const topLevelSource = record.source;
+  const nestedSource = record.transaction?.source;
+  return topLevelSource !== 'simulated' && nestedSource !== 'simulated';
+};
+
+const filterRealTransactions = (records = []) => records.filter(isRealTransaction);
+
 const useGfdnStore = create((set, get) => ({
   workflow: null,
   transactions: [],
@@ -7,15 +16,22 @@ const useGfdnStore = create((set, get) => ({
   suggestions: [],
   isSavingWorkflow: false,
   setWorkflow: (workflow) => set({ workflow }),
-  setTransactions: (transactions) => set({ transactions }),
+  setTransactions: (transactions) => set({ transactions: filterRealTransactions(transactions) }),
   prependTransactions: (records) =>
     set((state) => {
-      const combined = [...records, ...state.transactions];
+      const incoming = filterRealTransactions(records);
+      if (!incoming.length) {
+        return { transactions: state.transactions };
+      }
+      const combined = [...incoming, ...state.transactions];
       const unique = Array.from(new Map(combined.map((txn) => [txn.id, txn])).values());
       return { transactions: unique.slice(0, 200) };
     }),
   addTransaction: (record) =>
     set((state) => {
+      if (!isRealTransaction(record)) {
+        return state;
+      }
       const existingMap = new Map(state.transactions.map((txn) => [txn.id, txn]));
       existingMap.set(record.id, record);
       const ordered = [record, ...state.transactions.filter((txn) => txn.id !== record.id)];
@@ -47,7 +63,7 @@ const useGfdnStore = create((set, get) => ({
     const [workflowRes, metricsRes, transactionsRes, suggestionsRes] = await Promise.all([
       fetch('/api/workflows/active'),
       fetch('/api/metrics'),
-      fetch('/api/transactions?limit=50'),
+      fetch('/api/transactions/live'),
       fetch('/api/suggestions'),
     ]);
     const [workflow, metrics, transactions, suggestions] = await Promise.all([

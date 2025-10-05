@@ -7,7 +7,7 @@ function sanitizeWorkflow(workflow) {
   return workflow.nodes.filter((node) => nodeRegistry[node.type]);
 }
 
-export function executeWorkflow(workflow, transaction, services) {
+export async function executeWorkflow(workflow, transaction, services) {
   const nodes = sanitizeWorkflow(workflow);
   const history = [];
   let decision = {
@@ -18,7 +18,7 @@ export function executeWorkflow(workflow, transaction, services) {
   for (const node of nodes) {
     const handler = nodeRegistry[node.type];
     if (!handler) continue;
-    const result = handler({
+    const result = await handler({
       transaction,
       config: node.config,
       services,
@@ -33,6 +33,7 @@ export function executeWorkflow(workflow, transaction, services) {
     };
     history.push(normalized);
 
+    // BLOCK immediately stops the workflow
     if (result.status === 'BLOCK') {
       decision = {
         status: 'BLOCK',
@@ -42,7 +43,8 @@ export function executeWorkflow(workflow, transaction, services) {
       break;
     }
 
-    if (result.status === 'APPROVE') {
+    // APPROVE from DECISION node stops the workflow
+    if (result.status === 'APPROVE' && node.type === 'DECISION') {
       decision = {
         status: 'APPROVE',
         reason: result.reason || `Approved by ${node.label || node.type}`,
@@ -50,9 +52,21 @@ export function executeWorkflow(workflow, transaction, services) {
       };
       break;
     }
+
+    // FLAG from DECISION node stops the workflow
+    if (result.status === 'FLAG' && node.type === 'DECISION') {
+      decision = {
+        status: 'FLAG',
+        reason: result.reason || `Flagged by ${node.label || node.type}`,
+        triggeredBy: node.id,
+      };
+      break;
+    }
+
+    // For non-DECISION nodes, FLAG and APPROVE just continue to next node
   }
 
-  if (decision.status !== 'BLOCK' && decision.status !== 'APPROVE') {
+  if (decision.status !== 'BLOCK' && decision.status !== 'APPROVE' && decision.status !== 'FLAG') {
     const flaggedNodes = history.filter((item) => item.status === 'FLAG');
     if (flaggedNodes.length > 0) {
       decision = {

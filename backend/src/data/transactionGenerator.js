@@ -108,6 +108,7 @@ export class TransactionGenerator extends EventEmitter {
         timestamp: dayjs().toISOString(),
         amount: randomAmount(),
         currency: randomChoice(['USD', 'EUR', 'USD', 'USD', 'GBP', 'SGD']),
+        source: 'simulated',
         origin: {
           ...origin,
           deviceId: `device-${Math.floor(Math.random() * 50)}`,
