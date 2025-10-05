@@ -105,7 +105,7 @@ const getDefaultMiddleNodes = () => [
   },
   {
     id: 'anomaly',
-    label: 'AI Anomaly',
+    label: 'Anomaly Check',
     type: 'ANOMALY_CHECK',
     config: {
       blockThreshold: 85,
