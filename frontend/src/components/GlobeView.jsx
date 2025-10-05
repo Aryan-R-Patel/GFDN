@@ -1,7 +1,6 @@
-// GlobeView.jsx
-import { Canvas } from "@react-three/fiber";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Line, useTexture } from "@react-three/drei";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CatmullRomCurve3, Vector3 } from "three";
 
 const decisionColors = {
@@ -9,25 +8,43 @@ const decisionColors = {
   FLAG: "#facc15",
   BLOCK: "#f87171",
 };
+
 const radius = 2.2;
 
-// --- Earth (no pointer events to allow OrbitControls) ---
+// --- Earth Component ---
 function Earth({ radius }) {
+  const meshRef = useRef();
+
+  // Texture URLs
   const colorMap = useTexture(
     "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
   );
   const bumpMap = useTexture(
     "https://unpkg.com/three-globe/example/img/earth-topology.png"
   );
+
+  // Optional: Add subtle rotation to the globe itself
+  useFrame((state, delta) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y += delta * 0.05;
+    }
+  });
+
   return (
-    <mesh raycast={() => null}>
-      <sphereGeometry args={[radius, 128, 128]} />
-      <meshStandardMaterial map={colorMap} bumpMap={bumpMap} bumpScale={0.02} />
+    <mesh ref={meshRef}>
+      <sphereGeometry args={[radius, 64, 64]} />
+      <meshStandardMaterial
+        map={colorMap}
+        bumpMap={bumpMap}
+        bumpScale={0.02}
+        metalness={0.1}
+        roughness={0.7}
+      />
     </mesh>
   );
 }
 
-// --- helpers ---
+// --- Helper Functions ---
 function latLonToVector3(lat, lon, r, altitude = 0) {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lon + 180) * (Math.PI / 180);
@@ -38,6 +55,7 @@ function latLonToVector3(lat, lon, r, altitude = 0) {
     rad * Math.sin(phi) * Math.sin(theta)
   );
 }
+
 function buildArcPoints(origin, destination, r) {
   const start = latLonToVector3(origin.lat, origin.lng, r, 0);
   const end = latLonToVector3(destination.lat, destination.lng, r, 0);
@@ -49,175 +67,216 @@ function buildArcPoints(origin, destination, r) {
     .multiplyScalar(r * 1.15);
   return new CatmullRomCurve3([start, mid, end]).getPoints(80);
 }
+
+// --- Transaction Arc Component ---
 function TransactionArc({ arc, radius }) {
   const points = useMemo(
     () => buildArcPoints(arc.origin, arc.destination, radius),
     [arc, radius]
   );
-  return <Line points={points} color={arc.color} lineWidth={1} />;
+  return <Line points={points} color={arc.color} lineWidth={2} opacity={0.8} />;
 }
-function TransactionsLayer({ arcs, radius }) {
-  return arcs.map(a => <TransactionArc key={a.id} arc={a} radius={radius} />);
-}
-function pointInRing([x, y], ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i],
-      [xj, yj] = ring[j];
-    const intersect =
-      yi > y !== yj > y &&
-      x < ((xj - xi) * (y - yi)) / (yj - yi || Number.EPSILON) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-function isPointInGeoFeature(point, feature) {
-  const g = feature.geometry;
-  if (!g) return false;
-  if (g.type === "Polygon") {
-    const rings = g.coordinates;
-    if (!pointInRing(point, rings[0])) return false;
-    for (let k = 1; k < rings.length; k++)
-      if (pointInRing(point, rings[k])) return false;
-    return true;
-  }
-  if (g.type === "MultiPolygon") {
-    for (const poly of g.coordinates) {
-      if (pointInRing(point, poly[0])) {
-        let hole = false;
-        for (let k = 1; k < poly.length; k++)
-          if (pointInRing(point, poly[k])) {
-            hole = true;
-            break;
-          }
-        if (!hole) return true;
-      }
+
+// --- Transactions Layer ---
+function TransactionsLayer({ transactions, radius }) {
+  // Sample transaction arcs for demonstration
+  const arcs = useMemo(() => {
+    // Create sample arcs if no transactions provided
+    if (!transactions || transactions.length === 0) {
+      return [
+        {
+          id: 1,
+          origin: { lat: 40.7128, lng: -74.0060 }, // New York
+          destination: { lat: 51.5074, lng: -0.1278 }, // London
+          color: decisionColors.APPROVE
+        },
+        {
+          id: 2,
+          origin: { lat: 35.6762, lng: 139.6503 }, // Tokyo
+          destination: { lat: 37.7749, lng: -122.4194 }, // San Francisco
+          color: decisionColors.FLAG
+        },
+        {
+          id: 3,
+          origin: { lat: -33.8688, lng: 151.2093 }, // Sydney
+          destination: { lat: 1.3521, lng: 103.8198 }, // Singapore
+          color: decisionColors.BLOCK
+        },
+      ];
     }
-  }
-  return false;
-}
-function pointToLatLon(p) {
-  const r = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-  const phi = Math.acos(p.y / r);
-  const lat = 90 - (phi * 180) / Math.PI;
-  const theta = Math.atan2(p.z, -p.x);
-  const lon = (theta * 180) / Math.PI - 180;
-  return { lat, lon };
+    return transactions;
+  }, [transactions]);
+
+  return (
+    <>
+      {arcs.map(arc => (
+        <TransactionArc key={arc.id} arc={arc} radius={radius} />
+      ))}
+    </>
+  );
 }
 
-// --- main ---
+// --- Loading Fallback Component ---
+function LoadingFallback() {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      color: 'white',
+      fontSize: '1.5rem',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      Loading globe...
+    </div>
+  );
+}
+
+// --- Main Globe View Component ---
 export default function GlobeView({ transactions = [] }) {
-  const arcs = useMemo(() => [], []);
-
-  const [countries, setCountries] = useState([]);
-  const [hoverCountryIdx, setHoverCountryIdx] = useState(null);
   const controlsRef = useRef();
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const autoRotationTimeoutRef = useRef(null);
 
-  // Function to handle user interaction
+  // Handle user interaction for auto-rotation
   const handleInteraction = () => {
     setIsAutoRotating(false);
-    // Clear any existing timeout
+
     if (autoRotationTimeoutRef.current) {
       clearTimeout(autoRotationTimeoutRef.current);
     }
-    // Set a new timeout to resume rotation after 5 seconds of inactivity
+
     autoRotationTimeoutRef.current = setTimeout(() => {
       setIsAutoRotating(true);
     }, 5000);
   };
 
+  // Cleanup timeout on unmount
   useEffect(() => {
-    let mounted = true;
-    fetch(
-      "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
-    )
-      .then(r => r.json())
-      .then(j => {
-        if (mounted) setCountries(j.features || []);
-      })
-      .catch(err => console.warn("Failed to load countries geojson", err));
     return () => {
-      mounted = false;
       if (autoRotationTimeoutRef.current) {
         clearTimeout(autoRotationTimeoutRef.current);
       }
     };
   }, []);
 
-  // Removed handlePointerMove and handleClick since they block OrbitControls
-
   return (
-    <Suspense fallback={<div className="globe-fallback">Loading globe…</div>}>
-      <div
+    <div style={{
+      width: '100vw',
+      height: '100vh',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      margin: 0,
+      padding: 0,
+      overflow: 'hidden',
+      background: 'linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%)'
+    }}>
+      <Canvas
+        camera={{
+          position: [0, 0, 6],
+          fov: 45,
+          near: 0.1,
+          far: 1000
+        }}
         style={{
-          width: "100vw",
-          height: "100vh",
-          position: "fixed",
-          inset: 0,
-          zIndex: 0,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%'
         }}
       >
-        <Canvas
-          camera={{ position: [0, 0, 6], fov: 45 }}
-          style={{ position: "absolute", inset: 0 }}
-        >
-          <color attach="background" args={[0, 0, 0]} />
-          <ambientLight intensity={0.8} />
-          <directionalLight position={[3, 3, 5]} intensity={1} />
-          <OrbitControls
-            ref={controlsRef}
-            enablePan={true}
-            enableZoom={true}
-            enableRotate={true}
-            minDistance={3}
-            maxDistance={10}
-            autoRotate={isAutoRotating}
-            autoRotateSpeed={0.5}
-            onStart={handleInteraction}
+        <Suspense fallback={null}>
+          {/* Lighting */}
+          <ambientLight intensity={0.4} />
+          <directionalLight
+            position={[5, 3, 5]}
+            intensity={0.8}
+            castShadow
           />
+          <directionalLight
+            position={[-5, 3, -5]}
+            intensity={0.2}
+          />
+
+          {/* Stars Background */}
           <Stars
             radius={300}
             depth={60}
-            count={20000}
-            factor={7}
+            count={5000}
+            factor={4}
             saturation={0}
             fade={true}
-          />
-          <Earth radius={radius} />
-
-          {/* Earth with no events - allows OrbitControls to work */}
-          <Earth radius={radius} />
-
-          {/* Removed hover outline to allow full interaction */}
-
-          <TransactionsLayer arcs={arcs} radius={radius} />
-
-          <Stars
-            radius={100}
-            depth={50}
-            count={2000}
-            factor={2.5}
-            saturation={0}
-            fade
+            speed={0.5}
           />
 
+          {/* Earth Globe */}
+          <Earth radius={radius} />
+
+          {/* Transaction Arcs */}
+          <TransactionsLayer transactions={transactions} radius={radius} />
+
+          {/* Camera Controls */}
           <OrbitControls
-            makeDefault
             ref={controlsRef}
             enablePan={false}
-            enableZoom
-            enableRotate
-            enableDamping
-            dampingFactor={0.08}
-            rotateSpeed={0.8}
-            minDistance={radius * 1.2}
-            maxDistance={radius * 4}
-            autoRotate={false}
+            enableZoom={true}
+            enableRotate={true}
+            enableDamping={true}
+            dampingFactor={0.05}
+            rotateSpeed={0.5}
+            zoomSpeed={0.8}
+            minDistance={3}
+            maxDistance={10}
+            autoRotate={isAutoRotating}
+            autoRotateSpeed={0.3}
+            onStart={handleInteraction}
           />
-        </Canvas>
+        </Suspense>
+      </Canvas>
+
+      {/* Optional: Info Panel Overlay */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px',
+        color: 'white',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '0.9rem',
+        opacity: 0.8,
+        pointerEvents: 'none',
+        userSelect: 'none'
+      }}>
+        <div style={{ marginBottom: '5px' }}>
+          <span style={{ color: decisionColors.APPROVE }}>●</span> Approved
+        </div>
+        <div style={{ marginBottom: '5px' }}>
+          <span style={{ color: decisionColors.FLAG }}>●</span> Flagged
+        </div>
+        <div>
+          <span style={{ color: decisionColors.BLOCK }}>●</span> Blocked
+        </div>
       </div>
-    </Suspense>
+
+      {/* Optional: Controls hint */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        color: 'white',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '0.85rem',
+        opacity: 0.6,
+        pointerEvents: 'none',
+        userSelect: 'none',
+        textAlign: 'right'
+      }}>
+        Scroll to zoom • Drag to rotate
+      </div>
+    </div>
   );
 }
