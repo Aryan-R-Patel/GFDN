@@ -87,30 +87,36 @@ function nodeShadow(type) {
 }
 
 function CardNode({ data, selected }) {
+  const primaryColor = badgeColor(data?.type);
+  const borderColor = selected
+    ? tone.base.accent
+    : primaryColor ?? tone.base.accent;
   return (
     <div
       style={{
         background: tone.base.card,
         color: tone.base.text,
-        border: `1px solid ${selected ? tone.base.accent : tone.base.border}`,
+        border: `1px solid ${borderColor}`,
         borderRadius: 12,
         minWidth: 180,
         boxShadow: selected
           ? `0 0 0 3px ${tone.base.accentSoft}, ${nodeShadow(data?.type)}`
-          : nodeShadow(data?.type),
+          : `0 0 0 3px ${primaryColor}22, ${nodeShadow(data?.type)}`,
       }}
       className="rf-node-card"
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          background: tone.base.border,
-          width: 8,
-          height: 8,
-          borderRadius: 2,
-        }}
-      />
+      {data?.type !== "INPUT" && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{
+            background: tone.base.border,
+            width: 8,
+            height: 8,
+            borderRadius: 2,
+          }}
+        />
+      )}
       <div
         style={{
           padding: "10px 12px 8px 12px",
@@ -160,16 +166,18 @@ function CardNode({ data, selected }) {
         </span>
         <span>config {data?.config ? "• editable" : ""}</span>
       </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          background: tone.base.border,
-          width: 8,
-          height: 8,
-          borderRadius: 2,
-        }}
-      />
+      {data?.type !== "DECISION" && (
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{
+            background: tone.base.border,
+            width: 8,
+            height: 8,
+            borderRadius: 2,
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -612,12 +620,17 @@ export default function WorkflowEditor({ workflow }) {
               defaultEdgeOptions={{
                 type: "smoothstep",
                 animated: false,
-                style: { stroke: tone.base.border, strokeWidth: 2 },
+                style: {
+                  stroke: tone.base.accent,
+                  strokeWidth: 2.4,
+                  opacity: 0.85,
+                  filter: "drop-shadow(0 0 4px rgba(110, 168, 254, 0.45))",
+                },
               }}
               connectionLineStyle={{
                 stroke: tone.base.accent,
-                strokeWidth: 2,
-                opacity: 0.8,
+                strokeWidth: 2.4,
+                opacity: 0.9,
               }}
             >
               <Background
