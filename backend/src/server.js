@@ -106,7 +106,7 @@ const getDefaultMiddleNodes = () => [
   {
     id: 'anomaly',
     label: 'AI Anomaly',
-    type: 'AI_ANOMALY',
+    type: 'ANOMALY_CHECK',
     config: {
       blockThreshold: 85,
       flagThreshold: 60,
@@ -328,19 +328,19 @@ app.get('/api/suggestions', (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, context } = req.body;
-    
+
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     // Generate a session ID based on request headers for conversation memory
     const sessionId = chatbotService.getSessionId(req);
-    
+
     const response = await chatbotService.generateResponse(message, context, sessionId);
     res.json({ response });
   } catch (error) {
     console.error('Chat API error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Internal server error',
       response: 'I apologize, but I encountered an error processing your request. Please try again.'
     });

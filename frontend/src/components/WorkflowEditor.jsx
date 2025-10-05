@@ -38,8 +38,8 @@ const palette = [
     reactType: "default",
   },
   {
-    type: "AI_ANOMALY",
-    label: "AI Anomaly",
+    type: "ANOMALY_CHECK",
+    label: "Anomaly Check",
     config: { blockThreshold: 85, flagThreshold: 60 },
     reactType: "default",
   },
@@ -72,7 +72,7 @@ const tone = {
     DECISION: { chip: "#66d19e", glow: "#66d19e44" },
     GEO_CHECK: { chip: "#a78bfa", glow: "#a78bfa33" },
     VELOCITY_CHECK: { chip: "#f59e0b", glow: "#f59e0b33" },
-    AI_ANOMALY: { chip: "#ef4444", glow: "#ef444433" },
+    ANOMALY_CHECK: { chip: "#ef4444", glow: "#ef444433" },
     default: { chip: "#6ea8fe", glow: "#6ea8fe33" },
   },
 };
