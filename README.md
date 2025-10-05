@@ -3,6 +3,8 @@
 
 A real-time fraud detection and prevention platform with AI-powered chatbot featuring voice capabilities.
 
+## [Demo](https://youtu.be/DS-EhEhqzJU)
+
 ## Features
 
 - **Real-time Fraud Detection**: Advanced workflow-based fraud detection system
