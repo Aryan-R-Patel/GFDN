@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import inputNode from '../src/workflow/nodes/inputNode.js';
 
 describe('Input Node', () => {

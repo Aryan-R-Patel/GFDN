@@ -14,6 +14,7 @@ import { MetricsManager } from './metrics.js';
 import { generateSuggestions } from './suggestions/engine.js';
 import { fetchAll, writeData, pushData } from '../firebase.js';
 import chatbotService from './chatbot/service.js';
+import voiceService from './chatbot/voiceService.js';
 
 const app = express();
 app.use(cors());
@@ -192,13 +193,27 @@ const getDefaultMiddleNodes = () => [
   },
   {
     id: 'anomaly',
-    label: 'AI Anomaly',
-    type: 'AI_ANOMALY',
+    label: 'Anomaly Check',
+    type: 'ANOMALY_CHECK',
     config: {
       blockThreshold: 85,
       flagThreshold: 60,
     },
     position: { x: 750, y: 0 },
+  },
+  {
+    id: 'gemini-check',
+    label: 'Gemini AI Check',
+    type: 'GEMINI_CHECK',
+    config: {
+      blockThreshold: 80,
+      flagThreshold: 55,
+      fallbackAction: 'FLAG',
+      analysisFocus:
+        'Pay extra attention to cross-border transfers, rapid device changes, and high-risk payment methods.',
+      model: 'gemini-2.5-flash',
+    },
+    position: { x: 900, y: 0 },
   },
 ];
 
@@ -255,6 +270,7 @@ let activeWorkflow = wrapWorkflowWithSystemNodes({
   edges: [
     { id: 'e1', source: 'geo-check', target: 'velocity-check' },
     { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+    { id: 'e3', source: 'anomaly', target: 'gemini-check' },
   ],
 });
 
@@ -275,6 +291,7 @@ async function loadWorkflowFromFirebase() {
         edges: [
           { id: 'e1', source: 'geo-check', target: 'velocity-check' },
           { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+          { id: 'e3', source: 'anomaly', target: 'gemini-check' },
         ],
       };
       await writeData('/workflow', defaultMiddleNodes);
@@ -291,6 +308,7 @@ async function loadWorkflowFromFirebase() {
       edges: [
         { id: 'e1', source: 'geo-check', target: 'velocity-check' },
         { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+        { id: 'e3', source: 'anomaly', target: 'gemini-check' },
       ],
     };
     activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
@@ -298,6 +316,7 @@ async function loadWorkflowFromFirebase() {
 }
 
 const generator = new TransactionGenerator(1200);
+const ENABLE_SIMULATOR = process.env.ENABLE_SIMULATOR !== 'false';
 
 function emitState() {
   const snapshot = metrics.snapshot();
@@ -312,13 +331,29 @@ function addRecentTransaction(record) {
   }
 }
 
-function processTransaction(transaction) {
+async function processTransaction(transaction) {
   const start = Date.now();
   const services = {
     metrics,
     velocityCache,
+    logger: console,
   };
-  const result = executeWorkflow(activeWorkflow, transaction, services);
+  let result;
+
+  try {
+    result = await executeWorkflow(activeWorkflow, transaction, services);
+  } catch (error) {
+    console.error('Failed to execute workflow for generator transaction:', error);
+    metrics.increment('workflowError');
+    result = {
+      decision: {
+        status: 'FLAG',
+        reason: `Workflow execution error: ${error.message}`,
+      },
+      history: [],
+    };
+  }
+
   const latency = Date.now() - start;
 
   metrics.incrementCounter(result.decision.status, transaction.amount);
@@ -339,8 +374,13 @@ function processTransaction(transaction) {
   emitState();
 }
 
-generator.on('transaction', processTransaction);
-generator.start();
+if (ENABLE_SIMULATOR) {
+  generator.on('transaction', processTransaction);
+  generator.start();
+  console.log('Transaction simulator enabled (set ENABLE_SIMULATOR=false to disable).');
+} else {
+  console.log('Transaction simulator disabled via ENABLE_SIMULATOR env flag.');
+}
 
 setInterval(() => {
   suggestionsCache.splice(0, suggestionsCache.length, ...generateSuggestions({
@@ -534,21 +574,94 @@ app.get('/api/suggestions', (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, context } = req.body;
-    
+
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     // Generate a session ID based on request headers for conversation memory
     const sessionId = chatbotService.getSessionId(req);
-    
+
     const response = await chatbotService.generateResponse(message, context, sessionId);
     res.json({ response });
   } catch (error) {
     console.error('Chat API error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Internal server error',
       response: 'I apologize, but I encountered an error processing your request. Please try again.'
+    });
+  }
+});
+
+// Voice chat endpoint
+app.post('/api/chat/voice', async (req, res) => {
+  try {
+    const { message, context, voiceId } = req.body;
+    
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if voice service is configured
+    if (!voiceService.isConfigured) {
+      // Fallback to text-only response
+      const sessionId = chatbotService.getSessionId(req);
+      const response = await chatbotService.generateResponse(message, context, sessionId);
+      
+      return res.json({ 
+        response: response,
+        audio: null,
+        audioFormat: null,
+        error: 'Voice synthesis not available - ElevenLabs API key not configured'
+      });
+    }
+
+    // Generate a session ID based on request headers for conversation memory
+    const sessionId = chatbotService.getSessionId(req);
+    
+    const voiceResponse = await chatbotService.generateVoiceResponse(message, context, sessionId, voiceId);
+    
+    // Send audio as base64 encoded string
+    const audioBase64 = voiceResponse.audio.toString('base64');
+    
+    res.json({ 
+      response: voiceResponse.text,
+      audio: audioBase64,
+      audioFormat: 'mp3'
+    });
+  } catch (error) {
+    console.error('Voice chat API error:', error);
+    
+    // Fallback to text-only response on error
+    try {
+      const sessionId = chatbotService.getSessionId(req);
+      const response = await chatbotService.generateResponse(req.body.message, req.body.context, sessionId);
+      
+      res.json({ 
+        response: response,
+        audio: null,
+        audioFormat: null,
+        error: 'Voice synthesis failed, falling back to text response'
+      });
+    } catch (fallbackError) {
+      res.status(500).json({ 
+        error: 'Internal server error',
+        response: 'I apologize, but I encountered an error processing your voice request. Please try again.'
+      });
+    }
+  }
+});
+
+// Get available voices
+app.get('/api/voices', async (req, res) => {
+  try {
+    const voices = await voiceService.getAvailableVoices();
+    res.json({ voices });
+  } catch (error) {
+    console.error('Voices API error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      voices: []
     });
   }
 });
@@ -590,10 +703,11 @@ async function onFirebaseTransaction(transactionData, key) {
     const services = {
       metrics,
       velocityCache,
+      logger: console,
     };
 
     const start = Date.now();
-    const result = executeWorkflow(activeWorkflow, transaction, services);
+    const result = await executeWorkflow(activeWorkflow, transaction, services);
     const latency = Date.now() - start;
 
     // Update metrics

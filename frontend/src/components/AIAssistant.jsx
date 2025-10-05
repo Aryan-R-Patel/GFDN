@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import AudioVisualizer from "./AudioVisualizer";
+import VoiceRecorder from "./VoiceRecorder";
 
 export default function AIAssistant({
   suggestions = [],
@@ -15,6 +17,9 @@ export default function AIAssistant({
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(true); // Voice mode is default
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [currentAudioData, setCurrentAudioData] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Generate a persistent session ID for this browser session
@@ -36,12 +41,13 @@ export default function AIAssistant({
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+  const sendMessage = async (messageText = null) => {
+    const messageToSend = messageText || inputMessage;
+    if (!messageToSend.trim() || isLoading) return;
 
     const userMessage = {
       id: Date.now(),
-      text: inputMessage,
+      text: messageToSend,
       sender: "user",
       timestamp: new Date(),
     };
@@ -51,14 +57,15 @@ export default function AIAssistant({
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const endpoint = isVoiceMode ? "/api/chat/voice" : "/api/chat";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-ID": sessionId, // Send session ID for memory tracking
+          "X-Session-ID": sessionId,
         },
         body: JSON.stringify({
-          message: inputMessage,
+          message: messageToSend,
           context: {
             metrics,
             recentTransactions: transactions.slice(-10),
@@ -74,9 +81,25 @@ export default function AIAssistant({
         text: data.response,
         sender: "bot",
         timestamp: new Date(),
+        audio: data.audio || null, // Include audio data if available
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // If voice mode and audio is available, play it automatically
+      if (isVoiceMode && data.audio) {
+        setCurrentAudioData(data.audio);
+        setIsPlayingAudio(true);
+        
+        // Audio will stop playing automatically when done
+        setTimeout(() => {
+          setIsPlayingAudio(false);
+          setCurrentAudioData(null);
+        }, 10000); // Max 10 seconds, adjust as needed
+      } else if (isVoiceMode && data.error) {
+        // Show notification that voice synthesis is not available
+        console.warn('Voice synthesis not available:', data.error);
+      }
     } catch (error) {
       console.error("Error sending message:", error);
       const errorMessage = {
@@ -115,6 +138,42 @@ export default function AIAssistant({
     }
   };
 
+  const handleVoiceRecording = (data, type) => {
+    if (type === 'text') {
+      // Speech recognition result
+      sendMessage(data);
+    } else if (type === 'audio') {
+      // Audio recording - would need to implement speech-to-text on backend
+      console.log('Audio recording received:', data);
+      // For now, just show a message
+      const userMessage = {
+        id: Date.now(),
+        text: "[Voice message recorded - speech-to-text not implemented yet]",
+        sender: "user",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+    }
+  };
+
+  const toggleVoiceMode = () => {
+    setIsVoiceMode(!isVoiceMode);
+    setIsPlayingAudio(false);
+    setCurrentAudioData(null);
+  };
+
+  const playMessageAudio = (audio) => {
+    if (audio) {
+      setCurrentAudioData(audio);
+      setIsPlayingAudio(true);
+      
+      setTimeout(() => {
+        setIsPlayingAudio(false);
+        setCurrentAudioData(null);
+      }, 10000);
+    }
+  };
+
   return (
     <div className="panel panel--assistant">
       <div className="panel__header">
@@ -124,14 +183,40 @@ export default function AIAssistant({
             Ask me anything about fraud detection and prevention.
           </p>
         </div>
-        <button
-          onClick={clearConversation}
-          className="chatbot__clear-btn"
-          title="Clear conversation memory"
-        >
-          🔄
-        </button>
+        <div className="chatbot__controls">
+          <button
+            onClick={toggleVoiceMode}
+            className={`chatbot__mode-btn ${isVoiceMode ? 'chatbot__mode-btn--active' : ''}`}
+            title={`Switch to ${isVoiceMode ? 'text' : 'voice'} mode`}
+          >
+            {isVoiceMode ? '🎤' : '💬'}
+          </button>
+          <button
+            onClick={clearConversation}
+            className="chatbot__clear-btn"
+            title="Clear conversation memory"
+          >
+            🔄
+          </button>
+        </div>
       </div>
+
+      {/* Audio Visualizer */}
+      {isVoiceMode && (
+        <div className="chatbot__visualizer">
+          <AudioVisualizer 
+            isPlaying={isPlayingAudio}
+            audioData={currentAudioData}
+            className="chatbot__audio-viz"
+          />
+          <div className="chatbot__mode-indicator">
+            <span className="chatbot__mode-text">
+              🎤 Voice Mode {isPlayingAudio ? '(Speaking...)' : '(Ready)'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="chatbot">
         <div className="chatbot__messages">
           {messages.map(message => (
@@ -141,6 +226,15 @@ export default function AIAssistant({
             >
               <div className="chatbot__message-content">
                 <p>{message.text}</p>
+                {message.audio && (
+                  <button
+                    className="chatbot__replay-btn"
+                    onClick={() => playMessageAudio(message.audio)}
+                    title="Replay audio"
+                  >
+                    🔊 Replay
+                  </button>
+                )}
                 <span className="chatbot__timestamp">
                   {message.timestamp.toLocaleTimeString()}
                 </span>
@@ -160,22 +254,32 @@ export default function AIAssistant({
           )}
           <div ref={messagesEndRef} />
         </div>
+
         <div className="chatbot__input">
-          <textarea
-            value={inputMessage}
-            onChange={e => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Ask about fraud patterns, metrics, or workflow suggestions..."
-            rows={2}
-            disabled={isLoading}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!inputMessage.trim() || isLoading}
-            className="chatbot__send-btn"
-          >
-            Send
-          </button>
+          {isVoiceMode ? (
+            <VoiceRecorder 
+              onRecordingComplete={handleVoiceRecording}
+              disabled={isLoading}
+            />
+          ) : (
+            <>
+              <textarea
+                value={inputMessage}
+                onChange={e => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask about fraud patterns, metrics, or workflow suggestions..."
+                rows={2}
+                disabled={isLoading}
+              />
+              <button
+                onClick={() => sendMessage()}
+                disabled={!inputMessage.trim() || isLoading}
+                className="chatbot__send-btn"
+              >
+                Send
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

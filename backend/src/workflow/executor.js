@@ -7,7 +7,7 @@ function sanitizeWorkflow(workflow) {
   return workflow.nodes.filter((node) => nodeRegistry[node.type]);
 }
 
-export function executeWorkflow(workflow, transaction, services) {
+export async function executeWorkflow(workflow, transaction, services) {
   const nodes = sanitizeWorkflow(workflow);
   const history = [];
   let decision = {
@@ -18,7 +18,7 @@ export function executeWorkflow(workflow, transaction, services) {
   for (const node of nodes) {
     const handler = nodeRegistry[node.type];
     if (!handler) continue;
-    const result = handler({
+    const result = await handler({
       transaction,
       config: node.config,
       services,

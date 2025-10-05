@@ -1,0 +1,14 @@
+
+> gfdn-backend@0.1.0 start
+> node src/server.js
+
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+Initializing ChatbotService...
+API Key exists: true
+API Key length: 39
+Using model: gemini-2.5-flash
+Starting Firebase RTDB watcher on path: /transactions
+2025-10-05T01:35:59.618Z - Initial snapshot processed (existing keys=7).
+Loaded workflow from Firebase: Default Risk Flow
+GFDN backend listening on port 4000
+Active workflow: Default Risk Flow (v51)
