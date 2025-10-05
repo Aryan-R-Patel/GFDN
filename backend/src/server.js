@@ -113,6 +113,20 @@ const getDefaultMiddleNodes = () => [
     },
     position: { x: 750, y: 0 },
   },
+  {
+    id: 'gemini-check',
+    label: 'Gemini AI Check',
+    type: 'GEMINI_CHECK',
+    config: {
+      blockThreshold: 80,
+      flagThreshold: 55,
+      fallbackAction: 'FLAG',
+      analysisFocus:
+        'Pay extra attention to cross-border transfers, rapid device changes, and high-risk payment methods.',
+      model: 'gemini-2.5-flash',
+    },
+    position: { x: 900, y: 0 },
+  },
 ];
 
 // Wrap middle nodes with INPUT and DECISION nodes
@@ -168,6 +182,7 @@ let activeWorkflow = wrapWorkflowWithSystemNodes({
   edges: [
     { id: 'e1', source: 'geo-check', target: 'velocity-check' },
     { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+    { id: 'e3', source: 'anomaly', target: 'gemini-check' },
   ],
 });
 
@@ -188,6 +203,7 @@ async function loadWorkflowFromFirebase() {
         edges: [
           { id: 'e1', source: 'geo-check', target: 'velocity-check' },
           { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+          { id: 'e3', source: 'anomaly', target: 'gemini-check' },
         ],
       };
       await writeData('/workflow', defaultMiddleNodes);
@@ -204,6 +220,7 @@ async function loadWorkflowFromFirebase() {
       edges: [
         { id: 'e1', source: 'geo-check', target: 'velocity-check' },
         { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+        { id: 'e3', source: 'anomaly', target: 'gemini-check' },
       ],
     };
     activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
@@ -225,13 +242,29 @@ function addRecentTransaction(record) {
   }
 }
 
-function processTransaction(transaction) {
+async function processTransaction(transaction) {
   const start = Date.now();
   const services = {
     metrics,
     velocityCache,
+    logger: console,
   };
-  const result = executeWorkflow(activeWorkflow, transaction, services);
+  let result;
+
+  try {
+    result = await executeWorkflow(activeWorkflow, transaction, services);
+  } catch (error) {
+    console.error('Failed to execute workflow for generator transaction:', error);
+    metrics.increment('workflowError');
+    result = {
+      decision: {
+        status: 'FLAG',
+        reason: `Workflow execution error: ${error.message}`,
+      },
+      history: [],
+    };
+  }
+
   const latency = Date.now() - start;
 
   metrics.incrementCounter(result.decision.status, transaction.amount);
@@ -382,10 +415,11 @@ async function onFirebaseTransaction(transactionData, key) {
     const services = {
       metrics,
       velocityCache,
+      logger: console,
     };
 
     const start = Date.now();
-    const result = executeWorkflow(activeWorkflow, transaction, services);
+    const result = await executeWorkflow(activeWorkflow, transaction, services);
     const latency = Date.now() - start;
 
     // Update metrics
