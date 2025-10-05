@@ -65,13 +65,87 @@ button {
     rgba(0, 0, 0, 0.7) 0%,
     rgba(0, 0, 0, 0) 100%
   );
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.app__header-title {
+  pointer-events: none;
+  max-width: 520px;
 }
 
 .app__header-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.65rem;
+  pointer-events: auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.app__header-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.75rem;
+  padding: 0.6rem 1.15rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.36);
+  min-width: 138px;
+}
+
+.app__header-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.48);
+}
+
+.app__header-button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.7);
+  outline-offset: 2px;
+}
+
+.app__header-button__icon {
+  font-size: 1.15rem;
+  display: inline-flex;
+}
+
+.app__header-button--primary {
+  background: rgba(15, 15, 23, 0.72);
+  border-color: rgba(248, 250, 252, 0.08);
+}
+
+.app__header-button--primary:hover {
+  background: rgba(10, 10, 18, 0.86);
+}
+
+.app__header-button--ghost {
+  background: rgba(15, 23, 42, 0.55);
+  border-style: dashed;
+  color: #e2e8f0;
+}
+
+.app__header-button--danger {
+  background: rgba(24, 24, 24, 0.85);
+  border-color: rgba(248, 250, 252, 0.12);
+  color: #f8fafc;
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.42);
+}
+
+.app__header-button--danger:hover {
+  background: rgba(12, 12, 12, 0.92);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.52);
 }
 
 .workflow-nav-button {
@@ -694,10 +768,6 @@ button {
   background: rgba(30, 41, 59, 0.8);
 }
 
-.app__header-buttons {
-  display: flex;
-  gap: 0.75rem;
-}
 
 @media (max-width: 1200px) {
   .admin-content {
@@ -1106,6 +1176,21 @@ button {
   }
   .app__main-centered {
     grid-template-columns: 1fr;
+  }
+  .app__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .app__header-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .app__header-button {
+    min-width: unset;
   }
   .chat-drawer {
     position: fixed;

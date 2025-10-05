@@ -91,39 +91,33 @@ export default function AppView({
 
       {/* overlay */}
       <div className="app__content">
-        <header className="app__header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {/* left: title (not clickable) */}
-          <div style={{ pointerEvents: "none" }}>
+        <header className="app__header">
+          <div className="app__header-title">
             <h1>Global Fraud Defense Network</h1>
             <p className="app__subtitle">Visual, real-time fraud defense with AI-guided workflows.</p>
           </div>
-
-          {/* right: actions (clickable) */}
-          <div style={{ display: "flex", gap: 8, pointerEvents: "auto" }}>
-            <button onClick={onNavigateToWorkflow} className="btn" style={{ padding: "8px 12px", borderRadius: 10 }}>
-              Workflow
-            </button>
-            <button onClick={logout} className="btn" style={{ padding: "8px 12px", borderRadius: 10, background: "#ef4444", color: "#fff" }}>
-              Logout
-            </button>
-          </div>
-          <div
-            className="app__header-buttons"
-            style={{ pointerEvents: "auto" }}
-          >
+          <div className="app__header-actions">
             <button
-              className="workflow-nav-button workflow-nav-button--ghost"
+              className="app__header-button app__header-button--ghost"
               onClick={onNavigateToAdmin}
             >
-              <span className="workflow-nav-button__icon">🛠️</span>
+              <span className="app__header-button__icon" aria-hidden="true"> 
+              </span>
               Admin Console
             </button>
             <button
-              className="workflow-nav-button"
+              className="app__header-button app__header-button--primary"
               onClick={onNavigateToWorkflow}
             >
-              <span className="workflow-nav-button__icon">⚙️</span>
+              <span className="app__header-button__icon" aria-hidden="true">
+              </span>
               Edit Workflow
+            </button>
+            <button
+              className="app__header-button app__header-button--danger"
+              onClick={logout}
+            >
+              Logout
             </button>
           </div>
         </header>

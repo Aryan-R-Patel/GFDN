@@ -463,7 +463,7 @@ export default function AdminPage({ onBack }) {
 						<div className="admin-submit">
 							<button
 								type="submit"
-								className="admin-button"
+								className="admin-button admin-button--ghost"
 								disabled={status.state === "submitting"}
 							>
 								{status.state === "submitting" ? "Submitting…" : "Submit transaction"}
