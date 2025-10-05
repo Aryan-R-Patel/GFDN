@@ -1,0 +1,163 @@
+:root{
+  --bg:#000;
+  --card:#0b0b0f;
+  --cardGlass: rgba(11,11,15,0.6);
+  --border:#26272b;
+  --text:#e6e7eb;
+  --muted:#9aa0aa;
+  --accent:#10b981; /* emerald */
+  --accentSoft: rgba(16,185,129,0.18);
+  --error:#f43f5e;
+  --shadow: 0 30px 70px -20px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+
+.gs-root{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;background:#000;
+}
+.gs-aurora{
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(60% 45% at 50% 110%, rgba(16,185,129,.22), transparent),
+    radial-gradient(35% 30% at 15% 10%, rgba(59,130,246,.10), transparent);
+}
+.gs-scanlines{
+  position:absolute;inset:0;opacity:.06;mix-blend:screen;pointer-events:none;
+  background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.15) 0 1px,transparent 2px 4px);
+}
+
+.gs-card-wrap{position:relative;z-index:10;width:min(94vw,420px)}
+.gs-card{
+  position:relative;overflow:hidden;border:1px solid rgba(38,39,43,.8);
+  border-radius:18px;background:var(--cardGlass);backdrop-filter:blur(16px);
+  box-shadow:0 0 0 1px rgba(16,185,129,.08), var(--shadow);
+}
+.gs-card-header{
+  display:flex;gap:12px;align-items:center;padding:20px 24px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(to bottom, rgba(255,255,255,.05), transparent);
+}
+.gs-badge{
+  width:40px;height:40px;border-radius:12px;border:1px solid rgba(16,185,129,.25);
+  background:rgba(16,185,129,.15);box-shadow: inset 0 0 30px var(--accentSoft);
+}
+.gs-header-text h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.gs-header-text p{margin:2px 0 0;color:var(--muted);font-size:12px}
+
+.gs-body{padding:22px 24px}
+.gs-subtle{color:var(--muted);font-size:14px;margin:0 0 14px;text-align:center}
+
+.gs-field{display:block;margin-bottom:12px}
+.gs-label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.gs-input{
+  width:100%;padding:12px 14px;border-radius:12px;
+  background:rgba(17,17,22,.9);color:var(--text);
+  border:1px solid var(--border);outline:none;transition:border .2s, box-shadow .2s;
+}
+.gs-input:focus{border-color:rgba(16,185,129,.5); box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+
+.gs-btn{
+  width:100%; padding:12px 14px; border-radius:12px; border:1px solid transparent;
+  font-weight:600; cursor:pointer; transition:transform .05s ease, background .2s, opacity .2s;
+}
+.gs-btn:disabled{opacity:.6;cursor:not-allowed}
+.gs-btn:active{transform:translateY(1px)}
+.gs-btn-primary{background:var(--accent);color:#000}
+.gs-btn-primary:hover{filter:brightness(1.06)}
+.gs-btn-ghost{margin-top:8px;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:var(--text)}
+.gs-btn-ghost:hover{background:rgba(255,255,255,.1)}
+
+.gs-row{display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px}
+.gs-center{text-align:center}
+.gs-link{color:var(--accent);background:none;border:0;padding:0;cursor:pointer}
+.gs-link:hover{text-decoration:underline}
+
+.gs-error{
+  margin:10px 0 0; text-align:center; font-size:12px;
+  color:#fff; background:rgba(244,63,94,.08); border:1px solid rgba(244,63,94,.3);
+  border-radius:10px; padding:8px 10px;
+}
+
+.gs-footer{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 24px;border-top:1px solid var(--border);color:var(--muted);font-size:11px;
+}
+.gs-links a{margin-left:16px}
+
+.gs-watermark{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-weight:900;letter-spacing:.4em;font-size:8vw;color:#fff;
+  opacity:.04;user-select:none;pointer-events:none;
+}
+
+/* Globe */
+.gs-globe{
+  position:absolute;z-index:0;top:50%;left:50%;transform:translate(-50%,-50%);
+  border-radius:50%; box-shadow:0 0 140px rgba(16,185,129,.28);
+}
+.gs-globe-core{
+  width:100%;height:100%;border-radius:50%;border:1px solid rgba(16,185,129,.25);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(16,185,129,.12), transparent 55%),
+    conic-gradient(from 0deg at 50% 50%, rgba(16,185,129,.12) 0deg, transparent 40deg, transparent 80deg, rgba(16,185,129,.12) 120deg, transparent 160deg, transparent 200deg, rgba(16,185,129,.12) 240deg, transparent 280deg, transparent 320deg, rgba(16,185,129,.12) 360deg);
+}
+.gs-globe-shade{position:absolute;inset:0;border-radius:50%;
+  background:linear-gradient(to top, rgba(0,0,0,.7), transparent);
+}
+.gs-ground-fade{position:absolute;inset-inline:0;bottom:0;height:160px;
+  background:linear-gradient(to top,#000,transparent);pointer-events:none;
+}
+
+/* ---- match main app vibe (cobalt, soft glow, pill UI) ---- */
+:root{
+  --accent:#60a5fa;                /* cobalt */
+  --accentSoft: rgba(96,165,250,.22);
+  --card:#0d1018;
+  --border:#1f2937;
+}
+
+/* subtler background */
+.gs-aurora{
+  background:
+    radial-gradient(60% 45% at 50% 110%, rgba(96,165,250,.20), transparent),
+    radial-gradient(35% 30% at 15% 10%, rgba(0,0,0,.12), transparent);
+}
+.gs-scanlines{ opacity:.035; }
+
+/* card + typography */
+.gs-card{ background:rgba(13,16,24,.55); border-color:var(--border); }
+.gs-header-text h1{ font-size:34px; letter-spacing:-.02em; }
+.gs-header-text p{ font-size:14px; color:#a7b0bd; }
+
+/* inputs + buttons -> pill */
+.gs-input{ border-radius:14px; background:#0f1420; }
+.gs-btn{ border-radius:16px; }
+.gs-btn-primary{
+  background:var(--accent); color:#07101e; border:1px solid rgba(96,165,250,.5);
+}
+.gs-btn-primary:hover{ filter:brightness(1.06); }
+.gs-btn-ghost{
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+}
+
+/* links + watermark softer */
+.gs-link{ color:#93c5fd; }
+.gs-watermark{ opacity:.025; letter-spacing:.35em; }
+
+/* globe = blue glow */
+.gs-globe{ box-shadow:0 0 140px rgba(96,165,250,.28); }
+.gs-globe-core{
+  border:1px solid rgba(96,165,250,.25);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(96,165,250,.10), transparent 55%),
+    conic-gradient(from 0deg at 50% 50%,
+      rgba(96,165,250,.10) 0deg, transparent 40deg, transparent 80deg,
+      rgba(96,165,250,.10) 120deg, transparent 160deg, transparent 200deg,
+      rgba(96,165,250,.10) 240deg, transparent 280deg, transparent 320deg,
+      rgba(96,165,250,.10) 360deg);
+}
+
