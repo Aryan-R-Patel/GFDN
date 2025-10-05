@@ -1,6 +1,6 @@
 
 cd backend
-npm install
+ENABLE_SIMULATOR=false npm run dev
 
 cd ../frontend
 npm install
