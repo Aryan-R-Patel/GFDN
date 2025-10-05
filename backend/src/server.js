@@ -7,10 +7,12 @@ import { v4 as uuid } from 'uuid';
 import 'dotenv/config';
 
 import { TransactionGenerator } from './data/transactionGenerator.js';
+import startWatcher from './data/watchTransactions.js';
 import { executeWorkflow } from './workflow/executor.js';
 import { nodeRegistry } from './workflow/nodes/index.js';
 import { MetricsManager } from './metrics.js';
 import { generateSuggestions } from './suggestions/engine.js';
+import { fetchAll, writeData } from '../firebase.js';
 import chatbotService from './chatbot/service.js';
 
 const app = express();
@@ -53,58 +55,160 @@ const workflowSchema = z.object({
     .default([]),
 });
 
-let activeWorkflow = {
+// Hardcoded INPUT and DECISION nodes (never stored in Firebase)
+const INPUT_NODE_ID = 'system-input';
+const DECISION_NODE_ID = 'system-decision';
+
+const createInputNode = () => ({
+  id: INPUT_NODE_ID,
+  label: 'Input',
+  type: 'INPUT',
+  config: {
+    validateTransaction: true,
+    logEntry: true,
+  },
+  position: { x: 0, y: 0 },
+});
+
+const createDecisionNode = () => ({
+  id: DECISION_NODE_ID,
+  label: 'Decision',
+  type: 'DECISION',
+  config: {
+    autoApproveBelow: 40,
+    escalateOnFlag: true,
+  },
+  position: { x: 1000, y: 0 },
+});
+
+// Default middle nodes if Firebase doesn't have any
+const getDefaultMiddleNodes = () => [
+  {
+    id: 'geo-check',
+    label: 'Geo Check',
+    type: 'GEO_CHECK',
+    config: {
+      allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'],
+      action: 'FLAG',
+    },
+    position: { x: 250, y: 0 },
+  },
+  {
+    id: 'velocity-check',
+    label: 'Velocity Guard',
+    type: 'VELOCITY_CHECK',
+    config: {
+      maxPerWindow: 6,
+      flagOnly: true,
+    },
+    position: { x: 500, y: 0 },
+  },
+  {
+    id: 'anomaly',
+    label: 'AI Anomaly',
+    type: 'AI_ANOMALY',
+    config: {
+      blockThreshold: 85,
+      flagThreshold: 60,
+    },
+    position: { x: 750, y: 0 },
+  },
+];
+
+// Wrap middle nodes with INPUT and DECISION nodes
+function wrapWorkflowWithSystemNodes(middleNodesData) {
+  const middleNodes = middleNodesData.nodes || [];
+  const middleEdges = middleNodesData.edges || [];
+
+  const inputNode = createInputNode();
+  const decisionNode = createDecisionNode();
+
+  const allNodes = [inputNode, ...middleNodes, decisionNode];
+
+  // Find first and last middle node
+  const firstMiddleNode = middleNodes[0];
+  const lastMiddleNode = middleNodes[middleNodes.length - 1];
+
+  const systemEdges = [];
+
+  // Connect INPUT to first middle node
+  if (firstMiddleNode) {
+    systemEdges.push({
+      id: 'system-input-edge',
+      source: INPUT_NODE_ID,
+      target: firstMiddleNode.id,
+    });
+  }
+
+  // Connect last middle node to DECISION
+  if (lastMiddleNode) {
+    systemEdges.push({
+      id: 'system-decision-edge',
+      source: lastMiddleNode.id,
+      target: DECISION_NODE_ID,
+    });
+  }
+
+  const allEdges = [...systemEdges, ...middleEdges];
+
+  return {
+    id: middleNodesData.id || uuid(),
+    name: middleNodesData.name || 'Fraud Workflow',
+    version: middleNodesData.version || 1,
+    nodes: allNodes,
+    edges: allEdges,
+  };
+}
+
+let activeWorkflow = wrapWorkflowWithSystemNodes({
   id: uuid(),
   name: 'Default Risk Flow',
   version: 1,
-  nodes: [
-    {
-      id: 'geo-check',
-      label: 'Geo Check',
-      type: 'GEO_CHECK',
-      config: {
-        allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'],
-        action: 'FLAG',
-      },
-      position: { x: 0, y: 0 },
-    },
-    {
-      id: 'velocity-check',
-      label: 'Velocity Guard',
-      type: 'VELOCITY_CHECK',
-      config: {
-        maxPerWindow: 6,
-        flagOnly: true,
-      },
-      position: { x: 250, y: 0 },
-    },
-    {
-      id: 'anomaly',
-      label: 'AI Anomaly',
-      type: 'AI_ANOMALY',
-      config: {
-        blockThreshold: 85,
-        flagThreshold: 60,
-      },
-      position: { x: 500, y: 0 },
-    },
-    {
-      id: 'decision',
-      label: 'Decision',
-      type: 'DECISION',
-      config: {
-        autoApproveBelow: 40,
-        escalateOnFlag: true,
-      },
-      position: { x: 750, y: 0 },
-    },
-  ],
+  nodes: getDefaultMiddleNodes(),
   edges: [
     { id: 'e1', source: 'geo-check', target: 'velocity-check' },
     { id: 'e2', source: 'velocity-check', target: 'anomaly' },
-    { id: 'e3', source: 'anomaly', target: 'decision' },
   ],
-};
+});
+
+// Load workflow from Firebase on startup
+async function loadWorkflowFromFirebase() {
+  try {
+    const middleNodesData = await fetchAll('/workflow');
+    if (middleNodesData) {
+      console.log('Loaded workflow from Firebase:', middleNodesData.name || 'Unnamed');
+      activeWorkflow = wrapWorkflowWithSystemNodes(middleNodesData);
+    } else {
+      console.log('No workflow found in Firebase, using default and saving it');
+      const defaultMiddleNodes = {
+        id: uuid(),
+        name: 'Default Risk Flow',
+        version: 1,
+        nodes: getDefaultMiddleNodes(),
+        edges: [
+          { id: 'e1', source: 'geo-check', target: 'velocity-check' },
+          { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+        ],
+      };
+      await writeData('/workflow', defaultMiddleNodes);
+      activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
+    }
+  } catch (error) {
+    console.error('Failed to load workflow from Firebase:', error);
+    console.log('Using default workflow');
+    const defaultMiddleNodes = {
+      id: uuid(),
+      name: 'Default Risk Flow',
+      version: 1,
+      nodes: getDefaultMiddleNodes(),
+      edges: [
+        { id: 'e1', source: 'geo-check', target: 'velocity-check' },
+        { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+      ],
+    };
+    activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
+  }
+}
 
 const generator = new TransactionGenerator(1200);
 
@@ -167,17 +271,42 @@ app.get('/api/workflows/active', (req, res) => {
   res.json(activeWorkflow);
 });
 
-app.post('/api/workflows/active', (req, res) => {
+app.post('/api/workflows/active', async (req, res) => {
   const parseResult = workflowSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: 'Invalid workflow schema', details: parseResult.error.flatten() });
   }
 
-  activeWorkflow = {
-    ...parseResult.data,
+  // Extract middle nodes (filter out INPUT and DECISION)
+  const middleNodes = parseResult.data.nodes.filter(
+    (node) => node.type !== 'INPUT' && node.type !== 'DECISION'
+  );
+
+  // Extract middle edges (filter out system edges)
+  const middleEdges = parseResult.data.edges.filter(
+    (edge) => edge.source !== INPUT_NODE_ID && edge.target !== DECISION_NODE_ID
+  );
+
+  const middleNodesData = {
+    id: parseResult.data.id,
+    name: parseResult.data.name,
     version: (activeWorkflow.version || 1) + 1,
+    nodes: middleNodes,
+    edges: middleEdges,
     updatedAt: new Date().toISOString(),
   };
+
+  // Save only middle nodes to Firebase
+  try {
+    await writeData('/workflow', middleNodesData);
+    console.log('Workflow saved to Firebase (middle nodes only)');
+  } catch (error) {
+    console.error('Failed to save workflow to Firebase:', error);
+  }
+
+  // Wrap with system nodes for active workflow
+  activeWorkflow = wrapWorkflowWithSystemNodes(middleNodesData);
+
   velocityCache.clear();
   res.json({ status: 'updated', workflow: activeWorkflow });
   io.emit('workflow:update', activeWorkflow);
@@ -230,7 +359,129 @@ io.on('connection', (socket) => {
   socket.emit('transaction:seed', recentTransactions.slice(-50));
 });
 
+
 const PORT = process.env.PORT || 4000;
-httpServer.listen(PORT, () => {
-  console.log(`GFDN backend listening on port ${PORT}`);
+
+// Callback to process Firebase transactions through the workflow
+async function onFirebaseTransaction(transactionData, key) {
+  try {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔥 Processing Firebase Transaction through Workflow');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // Ensure transaction has required fields
+    const transaction = {
+      id: key || transactionData.id || `fb-${Date.now()}`,
+      amount: transactionData.amount,
+      accountId: transactionData.accountId || transactionData.account_id,
+      location: transactionData.location,
+      timestamp: transactionData.timestamp || new Date().toISOString(),
+      ...transactionData
+    };
+
+    const services = {
+      metrics,
+      velocityCache,
+    };
+
+    const start = Date.now();
+    const result = executeWorkflow(activeWorkflow, transaction, services);
+    const latency = Date.now() - start;
+
+    // Update metrics
+    metrics.incrementCounter(result.decision.status, transaction.amount);
+    metrics.recordLatency(latency);
+
+    // Create enriched transaction record
+    const enriched = {
+      id: transaction.id,
+      transaction,
+      decision: result.decision,
+      history: result.history,
+      processedAt: new Date().toISOString(),
+      latency,
+    };
+
+    // Add to recent transactions and emit to frontend
+    addRecentTransaction(enriched);
+    io.emit('transaction:new', enriched);
+    emitState();
+
+    const transactionKey = key || transaction.id;
+    if (transactionKey) {
+      try {
+        await writeData(`/transactions/${transactionKey}/decision`, result.decision.status);
+      } catch (persistError) {
+        console.error(`Failed to persist decision for transaction ${transactionKey}:`, persistError);
+      }
+    } else {
+      console.warn('Skipping decision persistence: missing transaction key');
+    }
+
+    // Print the decision in the terminal
+    const statusEmoji = result.decision.status === 'APPROVE' ? '✅' :
+                       result.decision.status === 'BLOCK' ? '🚫' : '⚠️';
+
+    console.log(`\n${statusEmoji} DECISION: ${result.decision.status}`);
+    console.log(`Reason: ${result.decision.reason}`);
+    console.log(`Transaction ID: ${transaction.id}`);
+    console.log(`Amount: $${transaction.amount}`);
+    console.log(`Processing Time: ${latency}ms`);
+
+    // Debug: Show workflow execution details
+    if (result.history && result.history.length > 0) {
+      console.log(`\nWorkflow Execution:`);
+      result.history.forEach((step) => {
+        const stepEmoji = step.status === 'CONTINUE' ? '→' :
+                         step.status === 'FLAG' ? '⚠️' :
+                         step.status === 'BLOCK' ? '🚫' : '✓';
+        console.log(`  ${stepEmoji} ${step.label || step.type}: ${step.status} - ${step.reason || ''}`);
+      });
+    } else {
+      console.log(`\n⚠️  Warning: No workflow nodes were executed!`);
+      console.log(`   Active workflow has ${activeWorkflow.nodes?.length || 0} nodes`);
+    }
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+  } catch (error) {
+    console.error('Error processing Firebase transaction through workflow:', error);
+  }
+}
+
+// Start the watcher immediately (so its logs appear in the same terminal when nodemon runs)
+let watcherStopFn = null;
+startWatcher('/transactions', onFirebaseTransaction)
+  .then((stopFn) => {
+    watcherStopFn = stopFn;
+  })
+  .catch((err) => {
+    console.error('Failed to start watcher:', err);
+  });
+
+// Initialize server with Firebase workflow
+async function startServer() {
+  await loadWorkflowFromFirebase();
+  httpServer.listen(PORT, () => {
+    console.log(`GFDN backend listening on port ${PORT}`);
+    console.log(`Active workflow: ${activeWorkflow.name} (v${activeWorkflow.version})`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
+
+process.on('SIGINT', () => {
+  try {
+    watcherStopFn && watcherStopFn();
+  } catch (e) {
+    console.warn('Error stopping watcher:', e);
+  }
+  try {
+    process.exit(0);
+  } catch (e) {
+    process.exit(1);
+  }
 });

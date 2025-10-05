@@ -10,45 +10,151 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import useGfdnStore from '../store/useGfdnStore.js';
 
+// Only middle nodes that can be added (INPUT and DECISION are system nodes)
 const palette = [
   {
     type: 'GEO_CHECK',
     label: 'Geo Check',
     config: { allowedCountries: ['US', 'CA', 'GB', 'DE', 'FR'], action: 'FLAG' },
+    reactType: 'default',
   },
   {
     type: 'VELOCITY_CHECK',
     label: 'Velocity Check',
     config: { maxPerWindow: 6, windowMs: 60_000, flagOnly: true },
+    reactType: 'default',
   },
   {
     type: 'AI_ANOMALY',
     label: 'AI Anomaly',
     config: { blockThreshold: 85, flagThreshold: 60 },
-  },
-  {
-    type: 'DECISION',
-    label: 'Decision',
-    config: { autoApproveBelow: 40, escalateOnFlag: true },
+    reactType: 'default',
   },
 ];
 
+const getReactNodeType = (workflowType) => {
+  if (workflowType === 'INPUT') return 'input';
+  if (workflowType === 'DECISION') return 'output';
+  return 'default';
+};
+
+const INPUT_NODE_ID = 'system-input';
+const DECISION_NODE_ID = 'system-decision';
+
+const createInputNode = () => ({
+  id: INPUT_NODE_ID,
+  type: 'input',
+  position: { x: 50, y: 180 },
+  data: {
+    label: 'Input',
+    type: 'INPUT',
+    config: { validateTransaction: true, logEntry: true },
+  },
+});
+
+const createDecisionNode = () => ({
+  id: DECISION_NODE_ID,
+  type: 'output',
+  position: { x: 800, y: 180 },
+  data: {
+    label: 'Decision',
+    type: 'DECISION',
+    config: { autoApproveBelow: 40, escalateOnFlag: true },
+  },
+});
+
+// Ensure INPUT and DECISION nodes are always present and connected
+const ensureSystemNodes = (nodes, edges) => {
+  let workingNodes = [...nodes];
+  let workingEdges = [...edges];
+
+  // Filter out any existing INPUT/DECISION nodes
+  workingNodes = workingNodes.filter(
+    (node) => node.data?.type !== 'INPUT' && node.data?.type !== 'DECISION'
+  );
+
+  // Filter out any system edges
+  workingEdges = workingEdges.filter(
+    (edge) => edge.source !== INPUT_NODE_ID && edge.target !== DECISION_NODE_ID
+  );
+
+  const inputNode = {
+    ...createInputNode(),
+    draggable: true,
+    deletable: false,
+    selectable: false,
+  };
+
+  const decisionNode = {
+    ...createDecisionNode(),
+    draggable: true,
+    deletable: false,
+    selectable: false,
+  };
+
+  // Find first node (no incoming edges from middle nodes)
+  const firstMiddleNode = workingNodes.find((node) =>
+    !workingEdges.some((edge) => edge.target === node.id)
+  );
+
+  // Find last node (no outgoing edges to middle nodes)
+  const lastMiddleNode = workingNodes.find((node) =>
+    !workingEdges.some((edge) => edge.source === node.id)
+  );
+
+  // Create system edges
+  const systemEdges = [];
+  if (firstMiddleNode) {
+    systemEdges.push({
+      id: 'system-input-edge',
+      source: INPUT_NODE_ID,
+      target: firstMiddleNode.id,
+      deletable: false,
+      selectable: false,
+    });
+  }
+  if (lastMiddleNode) {
+    systemEdges.push({
+      id: 'system-decision-edge',
+      source: lastMiddleNode.id,
+      target: DECISION_NODE_ID,
+      deletable: false,
+      selectable: false,
+    });
+  }
+
+  // Add system nodes at start and end
+  const allNodes = [inputNode, ...workingNodes, decisionNode];
+  const allEdges = [...systemEdges, ...workingEdges];
+
+  return { nodes: allNodes, edges: allEdges };
+};
+
 const cleanWorkflow = (workflow) => {
-  if (!workflow) return { nodes: [], edges: [] };
-  const nodes = workflow.nodes?.map((node) => ({
-    id: node.id,
-    position: node.position || { x: Math.random() * 400, y: Math.random() * 200 },
-    data: {
-      label: node.label || node.type,
-      type: node.type,
-      config: node.config || {},
-    },
-  }));
-  const edges = workflow.edges?.map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-  }));
+  if (!workflow) {
+    return ensureSystemNodes([], []);
+  }
+
+  let nodes =
+    workflow.nodes?.map((node) => ({
+      id: node.id,
+      type: getReactNodeType(node.type),
+      position: node.position || { x: Math.random() * 400, y: Math.random() * 200 },
+      data: {
+        label: node.label || node.type,
+        type: node.type,
+        config: node.config || {},
+      },
+    })) ?? [];
+  let edges =
+    workflow.edges?.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+    })) ?? [];
+
+  ({ nodes, edges } = ensureSystemNodes(nodes, edges));
+
   return { nodes, edges };
 };
 
@@ -85,27 +191,72 @@ export default function WorkflowEditor({ workflow }) {
     setEdges(initialEdges);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
 
-  const onConnect = useCallback(
-    (connection) => setEdges((eds) => addEdge({ ...connection, id: crypto.randomUUID() }, eds)),
+  // Restrict each node to one input and one output
+  const connectNodes = useCallback(
+    (connection) => {
+      setEdges((eds) => {
+        const filtered = eds.filter(
+          (edge) => edge.source !== connection.source && edge.target !== connection.target,
+        );
+        return addEdge({ ...connection, id: crypto.randomUUID() }, filtered);
+      });
+    },
     [setEdges],
   );
 
-  const onNodeClick = useCallback((_, node) => setSelectedNode(node), []);
+  const onConnect = useCallback((connection) => connectNodes(connection), [connectNodes]);
+
+  const onNodeClick = useCallback((_, node) => {
+    // Don't allow selecting system nodes
+    if (node.data?.type === 'INPUT' || node.data?.type === 'DECISION') {
+      setSelectedNode(null);
+    } else {
+      setSelectedNode(node);
+    }
+  }, []);
 
   const handleAddNode = (paletteNode) => {
     const id = crypto.randomUUID();
-    setNodes((nds) => [
-      ...nds,
-      {
-        id,
-        position: { x: 100 + Math.random() * 400, y: 50 + Math.random() * 200 },
-        data: {
-          label: paletteNode.label,
-          type: paletteNode.type,
-          config: paletteNode.config,
-        },
+    const newNode = {
+      id,
+      type: paletteNode.reactType ?? getReactNodeType(paletteNode.type),
+      position: { x: 300 + Math.random() * 300, y: 150 + Math.random() * 100 },
+      data: {
+        label: paletteNode.label,
+        type: paletteNode.type,
+        config: JSON.parse(JSON.stringify(paletteNode.config ?? {})),
       },
-    ]);
+    };
+
+    // Get middle nodes only (excluding INPUT and DECISION)
+    const middleNodes = nodes.filter(
+      (node) => node.data?.type !== 'INPUT' && node.data?.type !== 'DECISION'
+    );
+
+    // Insert new node and re-wrap with system nodes
+    const updatedMiddleNodes = [...middleNodes, newNode];
+    const middleEdges = edges.filter(
+      (edge) => edge.source !== INPUT_NODE_ID && edge.target !== DECISION_NODE_ID
+    );
+
+    // Auto-connect: if there are other middle nodes, connect from the last one
+    let updatedEdges = [...middleEdges];
+    if (middleNodes.length > 0) {
+      const lastMiddleNode = middleNodes[middleNodes.length - 1];
+      updatedEdges.push({
+        id: crypto.randomUUID(),
+        source: lastMiddleNode.id,
+        target: id,
+      });
+    }
+
+    const { nodes: wrappedNodes, edges: wrappedEdges } = ensureSystemNodes(
+      updatedMiddleNodes,
+      updatedEdges
+    );
+
+    setNodes(wrappedNodes);
+    setEdges(wrappedEdges);
   };
 
   const handleConfigChange = (event) => {
