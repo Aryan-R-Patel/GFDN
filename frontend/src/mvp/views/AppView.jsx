@@ -2,14 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import GlobeView from "../../components/GlobeView.jsx";
 import DashboardMetrics from "../../components/DashboardMetrics.jsx";
 import AIAssistant from "../../components/AIAssistant.jsx";
-<<<<<<< HEAD
 import TransactionSummary from "../../components/TransactionSummary.jsx";
-=======
-import WorkflowPage from "../../pages/WorkflowPage.jsx";
 import LoginPage from "../../pages/LoginPage.jsx";
 import { auth } from "../../lib/firebase.js";
 import { onAuthStateChanged, signOut } from "firebase/auth";
->>>>>>> developing
 
 export default function AppView({
   loading,
@@ -80,25 +76,12 @@ export default function AppView({
     );
   }
 
-<<<<<<< HEAD
-  // Show workflow page if on workflow page
-=======
+
   // not signed in
   if (!user) {
     return <LoginPage redirectTo="/" />;
   }
 
-  // workflow page
-  if (currentPage === "workflow") {
-    return (
-      <div className="app app--full">
-        <WorkflowPage workflow={workflow} onBack={onNavigateToDashboard} />
-      </div>
-    );
-  }
-
-  // main app (signed in)
->>>>>>> developing
   return (
     <div className="app">
       {/* background globe */}
@@ -124,7 +107,6 @@ export default function AppView({
               Logout
             </button>
           </div>
-<<<<<<< HEAD
           <div
             className="app__header-buttons"
             style={{ pointerEvents: "auto" }}
@@ -152,11 +134,6 @@ export default function AppView({
             <TransactionSummary transactions={transactions} />
           </div>
 
-=======
-        </header>
-
-        <main className="app__main-centered" style={{ pointerEvents: "none" }}>
->>>>>>> developing
           <div className="metrics-container">
             <DashboardMetrics metrics={metrics} />
           </div>
