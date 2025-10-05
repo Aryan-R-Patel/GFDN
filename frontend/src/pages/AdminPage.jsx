@@ -505,7 +505,7 @@ export default function AdminPage({ onBack }) {
 								{history.map(item => (
 									<li key={item.submittedAt}>
 										<span>{new Date(item.submittedAt).toLocaleTimeString()}</span>
-										<code>{item.response?.transactionId || "(pending)"}</code>
+											<code>{item.response?.transactionId || "(processing)"}</code>
 									</li>
 								))}
 							</ul>

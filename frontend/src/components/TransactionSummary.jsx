@@ -4,7 +4,7 @@ const statusClasses = {
   APPROVE: 'badge badge--approve',
   FLAG: 'badge badge--flag',
   BLOCK: 'badge badge--block',
-  PENDING: 'badge badge--pending',
+  CONTINUE: 'badge badge--continue',
 };
 
 function formatAmount(amount, currency) {
@@ -48,12 +48,14 @@ export default function TransactionSummary({ transactions = [] }) {
       ) : (
         <ul className="summary-panel__list">
           {items.map((item) => {
-            const status = item.decision?.status || 'PENDING';
+            const status = item.decision?.status || 'CONTINUE';
             const badgeClass = statusClasses[status] || 'badge';
             const transaction = item.transaction || {};
             const origin = transaction.origin || {};
             const destination = transaction.destination || {};
-            const reason = item.decision?.reason || 'Awaiting workflow decision';
+            const reason = item.decision?.reason || (status === 'CONTINUE'
+              ? 'Workflow processing'
+              : 'Decision synced from workflow');
             const amount = formatAmount(transaction.amount, transaction.currency);
 
             return (

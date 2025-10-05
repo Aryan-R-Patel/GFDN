@@ -16,6 +16,36 @@ import { fetchAll, writeData, pushData } from '../firebase.js';
 import chatbotService from './chatbot/service.js';
 import voiceService from './chatbot/voiceService.js';
 
+function sanitizeForFirebase(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    const sanitizedArray = value
+      .map((item) => sanitizeForFirebase(item))
+      .filter((item) => item !== undefined);
+    return sanitizedArray;
+  }
+
+  if (typeof value === 'object') {
+    const sanitizedObject = {};
+    for (const [key, val] of Object.entries(value)) {
+      const sanitizedVal = sanitizeForFirebase(val);
+      if (sanitizedVal !== undefined) {
+        sanitizedObject[key] = sanitizedVal;
+      }
+    }
+    return sanitizedObject;
+  }
+
+  return value;
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -132,12 +162,12 @@ function normalizeManualTransaction(input) {
       }).format(input.amount)} • ${input.payment_method}`,
     route_display: input.route_display || defaultRouteDisplay,
     latency_ms: input.latency_ms ?? 0,
-    decision: 'PENDING',
+    decision: 'CONTINUE',
     decisionDetails: {
-      status: 'PENDING',
-      reason: 'Awaiting workflow decision',
+      status: 'CONTINUE',
+      reason: 'Queued for workflow execution',
     },
-    decision_reason: 'Awaiting workflow decision',
+    decision_reason: 'Queued for workflow execution',
     createdAt: now,
     source: 'manual',
   };
@@ -523,8 +553,22 @@ app.get('/api/transactions/live', async (req, res) => {
         ? lastWorkflowResult.decision
         : null);
 
-      const status = valueObj.decision || storedDecisionDetails?.status || 'PENDING';
-      const reason = storedDecisionDetails?.reason || valueObj.decision_reason;
+      const decisionCandidates = [
+        storedDecisionDetails?.status,
+        lastWorkflowResult?.decision?.status,
+        valueObj.decision,
+      ].filter(Boolean);
+
+      const status = decisionCandidates.find((candidate) => candidate !== 'CONTINUE')
+        || decisionCandidates[0]
+        || 'CONTINUE';
+
+      const reason = storedDecisionDetails?.reason
+        || lastWorkflowResult?.decision?.reason
+        || valueObj.decision_reason
+        || (status === 'CONTINUE'
+          ? 'Workflow processing'
+          : 'Decision synced from workflow');
 
       return {
         id: transaction.id,
@@ -533,7 +577,7 @@ app.get('/api/transactions/live', async (req, res) => {
           status,
           reason:
             reason ||
-            (status === 'PENDING' ? 'Awaiting workflow decision' : 'Decision synced from workflow'),
+            (status === 'CONTINUE' ? 'Workflow processing' : 'Decision synced from workflow'),
           ...(storedDecisionDetails?.severity ? { severity: storedDecisionDetails.severity } : {}),
           ...(storedDecisionDetails?.metadata ? { metadata: storedDecisionDetails.metadata } : {}),
         },
@@ -709,6 +753,20 @@ async function onFirebaseTransaction(transactionData, key) {
     const start = Date.now();
     const result = await executeWorkflow(activeWorkflow, transaction, services);
     const latency = Date.now() - start;
+    const processedAt = new Date().toISOString();
+
+    const decisionDetails = {
+      status: result.decision.status,
+      reason: result.decision.reason,
+      ...(result.decision.severity ? { severity: result.decision.severity } : {}),
+      ...(result.decision.metadata ? { metadata: result.decision.metadata } : {}),
+    };
+
+    transaction.decision = result.decision.status;
+    transaction.decisionDetails = decisionDetails;
+    transaction.decision_reason = result.decision.reason;
+    transaction.history = Array.isArray(result.history) ? result.history : [];
+    transaction.processedAt = processedAt;
 
     // Update metrics
     metrics.incrementCounter(result.decision.status, transaction.amount);
@@ -720,7 +778,7 @@ async function onFirebaseTransaction(transactionData, key) {
       transaction,
       decision: result.decision,
       history: result.history,
-      processedAt: new Date().toISOString(),
+      processedAt,
       latency,
       source: transaction.source || 'firebase',
     };
@@ -733,29 +791,47 @@ async function onFirebaseTransaction(transactionData, key) {
     const transactionKey = key || transaction.id;
     if (transactionKey) {
       try {
-        const baseRecord = {
+        transactionData.decision = result.decision.status;
+        transactionData.decisionDetails = decisionDetails;
+        transactionData.decision_reason = result.decision.reason;
+        transactionData.history = transaction.history;
+        transactionData.latency_ms = latency;
+        transactionData.processedAt = processedAt;
+        transactionData.lastWorkflowRun = {
+          workflowId: activeWorkflow.id,
+          workflowName: activeWorkflow.name,
+          executedAt: processedAt,
+        };
+        transactionData.lastWorkflowResult = enriched;
+        transactionData.source = transaction.source || transactionData?.source || 'firebase';
+        transactionData.statusUpdatedAt = processedAt;
+        transactionData.transaction = transaction;
+
+        const finalRecord = {
           ...transactionData,
           id: transaction.id,
           decision: result.decision.status,
-          decisionDetails: {
-            status: result.decision.status,
-            reason: result.decision.reason,
-            ...(result.decision.severity ? { severity: result.decision.severity } : {}),
-            ...(result.decision.metadata ? { metadata: result.decision.metadata } : {}),
-          },
+          decisionDetails,
           decision_reason: result.decision.reason,
-          history: result.history || [],
+          history: transaction.history,
           latency_ms: latency,
-          processedAt: enriched.processedAt,
+          processedAt,
           lastWorkflowRun: {
-            workflowId: activeWorkflow.id,
-            workflowName: activeWorkflow.name,
-            executedAt: enriched.processedAt,
+          workflowId: activeWorkflow.id,
+          workflowName: activeWorkflow.name,
+          executedAt: processedAt,
           },
           lastWorkflowResult: enriched,
+          source: transaction.source || transactionData?.source || 'firebase',
+          statusUpdatedAt: processedAt,
+          transaction,
         };
 
-        await writeData(`/transactions/${transactionKey}`, baseRecord);
+        console.log('Persisting decision →', transactionKey, finalRecord.decision);
+
+        const sanitizedRecord = sanitizeForFirebase(finalRecord);
+
+        await writeData(`/transactions/${transactionKey}`, sanitizedRecord);
       } catch (persistError) {
         console.error(`Failed to persist decision for transaction ${transactionKey}:`, persistError);
       }
