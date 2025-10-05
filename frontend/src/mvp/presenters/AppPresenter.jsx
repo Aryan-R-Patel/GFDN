@@ -11,6 +11,7 @@ export default function AppPresenter() {
   const workflow = useGfdnStore(state => state.workflow);
   const suggestions = useGfdnStore(state => state.suggestions);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState('dashboard');
 
   // initialize socket listeners (they update the store directly)
   useSocketConnection();
@@ -43,6 +44,9 @@ export default function AppPresenter() {
       transactions={transactions}
       workflow={workflow}
       suggestions={suggestions}
+      currentPage={currentPage}
+      onNavigateToWorkflow={() => setCurrentPage('workflow')}
+      onNavigateToDashboard={() => setCurrentPage('dashboard')}
     />
   );
 }

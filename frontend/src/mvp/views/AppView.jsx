@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import GlobeView from "../../components/GlobeView.jsx";
 import DashboardMetrics from "../../components/DashboardMetrics.jsx";
 import AIAssistant from "../../components/AIAssistant.jsx";
+import WorkflowPage from "../../pages/WorkflowPage.jsx";
 
 export default function AppView({
   loading,
@@ -9,6 +10,9 @@ export default function AppView({
   transactions,
   workflow,
   suggestions,
+  currentPage,
+  onNavigateToWorkflow,
+  onNavigateToDashboard,
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(380);
@@ -63,6 +67,15 @@ export default function AppView({
     );
   }
 
+  // Show workflow page if on workflow page
+  if (currentPage === 'workflow') {
+    return (
+      <div className="app">
+        <WorkflowPage workflow={workflow} onBack={onNavigateToDashboard} />
+      </div>
+    );
+  }
+
   return (
 
 
@@ -83,6 +96,14 @@ export default function AppView({
               Visual, real-time fraud defense with AI-guided workflows.
             </p>
           </div>
+          <button
+            className="workflow-nav-button"
+            onClick={onNavigateToWorkflow}
+            style={{ pointerEvents: "auto" }}
+          >
+            <span className="workflow-nav-button__icon">⚙️</span>
+            Edit Workflow
+          </button>
         </header>
 
         <main className="app__main-centered" style={{ pointerEvents: "none" }}>
