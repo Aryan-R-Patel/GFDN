@@ -106,13 +106,27 @@ const getDefaultMiddleNodes = () => [
   },
   {
     id: 'anomaly',
-    label: 'AI Anomaly',
-    type: 'AI_ANOMALY',
+    label: 'Anomaly Check',
+    type: 'ANOMALY_CHECK',
     config: {
       blockThreshold: 85,
       flagThreshold: 60,
     },
     position: { x: 750, y: 0 },
+  },
+  {
+    id: 'gemini-check',
+    label: 'Gemini AI Check',
+    type: 'GEMINI_CHECK',
+    config: {
+      blockThreshold: 80,
+      flagThreshold: 55,
+      fallbackAction: 'FLAG',
+      analysisFocus:
+        'Pay extra attention to cross-border transfers, rapid device changes, and high-risk payment methods.',
+      model: 'gemini-2.5-flash',
+    },
+    position: { x: 900, y: 0 },
   },
 ];
 
@@ -169,6 +183,7 @@ let activeWorkflow = wrapWorkflowWithSystemNodes({
   edges: [
     { id: 'e1', source: 'geo-check', target: 'velocity-check' },
     { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+    { id: 'e3', source: 'anomaly', target: 'gemini-check' },
   ],
 });
 
@@ -189,6 +204,7 @@ async function loadWorkflowFromFirebase() {
         edges: [
           { id: 'e1', source: 'geo-check', target: 'velocity-check' },
           { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+          { id: 'e3', source: 'anomaly', target: 'gemini-check' },
         ],
       };
       await writeData('/workflow', defaultMiddleNodes);
@@ -205,6 +221,7 @@ async function loadWorkflowFromFirebase() {
       edges: [
         { id: 'e1', source: 'geo-check', target: 'velocity-check' },
         { id: 'e2', source: 'velocity-check', target: 'anomaly' },
+        { id: 'e3', source: 'anomaly', target: 'gemini-check' },
       ],
     };
     activeWorkflow = wrapWorkflowWithSystemNodes(defaultMiddleNodes);
@@ -212,6 +229,7 @@ async function loadWorkflowFromFirebase() {
 }
 
 const generator = new TransactionGenerator(1200);
+const ENABLE_SIMULATOR = process.env.ENABLE_SIMULATOR !== 'false';
 
 function emitState() {
   const snapshot = metrics.snapshot();
@@ -226,13 +244,29 @@ function addRecentTransaction(record) {
   }
 }
 
-function processTransaction(transaction) {
+async function processTransaction(transaction) {
   const start = Date.now();
   const services = {
     metrics,
     velocityCache,
+    logger: console,
   };
-  const result = executeWorkflow(activeWorkflow, transaction, services);
+  let result;
+
+  try {
+    result = await executeWorkflow(activeWorkflow, transaction, services);
+  } catch (error) {
+    console.error('Failed to execute workflow for generator transaction:', error);
+    metrics.increment('workflowError');
+    result = {
+      decision: {
+        status: 'FLAG',
+        reason: `Workflow execution error: ${error.message}`,
+      },
+      history: [],
+    };
+  }
+
   const latency = Date.now() - start;
 
   metrics.incrementCounter(result.decision.status, transaction.amount);
@@ -252,8 +286,13 @@ function processTransaction(transaction) {
   emitState();
 }
 
-generator.on('transaction', processTransaction);
-generator.start();
+if (ENABLE_SIMULATOR) {
+  generator.on('transaction', processTransaction);
+  generator.start();
+  console.log('Transaction simulator enabled (set ENABLE_SIMULATOR=false to disable).');
+} else {
+  console.log('Transaction simulator disabled via ENABLE_SIMULATOR env flag.');
+}
 
 setInterval(() => {
   suggestionsCache.splice(0, suggestionsCache.length, ...generateSuggestions({
@@ -329,19 +368,19 @@ app.get('/api/suggestions', (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, context } = req.body;
-    
+
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     // Generate a session ID based on request headers for conversation memory
     const sessionId = chatbotService.getSessionId(req);
-    
+
     const response = await chatbotService.generateResponse(message, context, sessionId);
     res.json({ response });
   } catch (error) {
     console.error('Chat API error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Internal server error',
       response: 'I apologize, but I encountered an error processing your request. Please try again.'
     });
@@ -456,10 +495,11 @@ async function onFirebaseTransaction(transactionData, key) {
     const services = {
       metrics,
       velocityCache,
+      logger: console,
     };
 
     const start = Date.now();
-    const result = executeWorkflow(activeWorkflow, transaction, services);
+    const result = await executeWorkflow(activeWorkflow, transaction, services);
     const latency = Date.now() - start;
 
     // Update metrics

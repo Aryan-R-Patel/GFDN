@@ -38,9 +38,22 @@ const palette = [
     reactType: "default",
   },
   {
-    type: "AI_ANOMALY",
-    label: "AI Anomaly",
+    type: "ANOMALY_CHECK",
+    label: "Anomaly Check",
     config: { blockThreshold: 85, flagThreshold: 60 },
+    reactType: "default",
+  },
+  {
+    type: "GEMINI_CHECK",
+    label: "Gemini AI Check",
+    config: {
+      blockThreshold: 80,
+      flagThreshold: 55,
+      fallbackAction: "FLAG",
+      analysisFocus:
+        "Look for cross-border, device, and payment-method anomalies that warrant manual review.",
+      model: "gemini-2.5-flash",
+    },
     reactType: "default",
   },
 ];
@@ -72,7 +85,8 @@ const tone = {
     DECISION: { chip: "#66d19e", glow: "#66d19e44" },
     GEO_CHECK: { chip: "#a78bfa", glow: "#a78bfa33" },
     VELOCITY_CHECK: { chip: "#f59e0b", glow: "#f59e0b33" },
-    AI_ANOMALY: { chip: "#ef4444", glow: "#ef444433" },
+    ANOMALY_CHECK: { chip: "#ef4444", glow: "#ef444433" },
+    GEMINI_CHECK: { chip: "#60a5fa", glow: "#60a5fa33" },
     default: { chip: "#6ea8fe", glow: "#6ea8fe33" },
   },
 };

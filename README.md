@@ -17,7 +17,7 @@ A real-time fraud detection and prevention platform with AI-powered chatbot feat
 
 ```bash
 cd backend
-npm install
+ENABLE_SIMULATOR=false npm run dev
 
 cd ../frontend
 npm install
